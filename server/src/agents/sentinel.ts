@@ -1,4 +1,4 @@
-﻿import { chat } from '../llm.ts'
+﻿import { chatHedged } from '../llm.ts'
 import { langName } from '../config.ts'
 import { db, newId } from '../db.ts'
 import { PAYEE_DIRECTORY, RAILS, CUSTOMER, type RailId } from '../seed.ts'
@@ -104,20 +104,24 @@ export async function assessTransfer(run: Run, input: TransferInput): Promise<As
   let message = ''
   let model = 'rules'
   if (decision !== 'release') {
-    const res = await chat({
+    const res = await chatHedged({
       role: 'super',
       maxTokens: 900,
-      // The customer is waiting on a paused payment: cap the wait, then Nano, then the template questions.
+      // The customer is waiting on a paused payment: if Super is slow or overloaded, Nano races it;
+      // if both fail within 12 s, the template questions below are used.
       timeoutMs: 12000,
+      backup: 'nano',
+      hedgeAfterMs: 5000,
       system: `You are Sentinel, the payment-protection agent of a bank. You can only PAUSE or HOLD payments; you can never send money.
 Write for the customer in ${langName(input.lang)}, warm and plain, no jargon, no blame.
 Reply JSON only:
 {"message": "<1-2 sentences: why we paused, reassure that no money has left>",
- "questions": [{"id": "q1", "text": "<yes/no question>", "risky_answer": "<the answer a scam victim would give>"}, ...2 or 3 items, tailored to the risk factors],
-Example: "Did someone on the phone tell you to make this payment?" -> risky_answer "yes"; "Have you paid this person before?" -> risky_answer "no".
-Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or company".
+ "questions": [{"id": "q1", "text": "<yes/no question where YES means danger>"}, ...2 or 3 items, tailored to the risk factors],
  "payee_explanation": "<if payee check is close_match or no_match: 2 sentences on what it means and why it matters; else empty>",
- "scam_pattern": "<1-2 sentences: what this kind of scam usually looks like>"}`,
+ "scam_pattern": "<1-2 sentences: what this kind of scam usually looks like>"}
+Phrase EVERY question so that answering YES points to a scam. Good: "Did someone on the phone tell you to make this payment?",
+"Is this the first time you are paying this person or company?". Bad (YES means safe): "Have you paid this person before?".
+Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or company".`,
       user: asData(
         'transfer_context',
         JSON.stringify({
@@ -139,7 +143,8 @@ Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or comp
       model = res.model
       // Pseudonyms are for the model only: show the customer the name they typed.
       const unmask = (s: unknown) => String(s ?? '').replace(/\bPAYEE_[A-Z0-9]+\b|\bUNKNOWN_PAYEE\b/g, input.payeeName || 'the payee').replace(/\bCUST_1\b/g, CUSTOMER.name.split(' ')[0])
-      questions = res.json.questions.slice(0, 3).map((q: any, i: number) => ({ id: `q${i + 1}`, text: unmask(q.text), riskyAnswer: String(q.risky_answer).toLowerCase() === 'no' ? 'no' : 'yes' }))
+      // Super labelled the risky answer backwards on some runs, so polarity is fixed by the prompt instead: YES = risk.
+      questions = res.json.questions.slice(0, 3).map((q: any, i: number) => ({ id: `q${i + 1}`, text: unmask(q.text), riskyAnswer: 'yes' as const }))
       payeeExplanation = unmask(res.json.payee_explanation)
       scamPattern = unmask(res.json.scam_pattern)
       message = unmask(res.json.message)
@@ -148,7 +153,7 @@ Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or comp
       model: res.model,
       ms: res.ms,
       status: res.ok ? 'ok' : 'fallback',
-      detail: res.ok ? { questions: questions.length } : { error: res.error },
+      detail: res.ok ? { questions: questions.length, ...(res.hedged ? { hedged: 'backup model answered first', failed: res.failed } : {}) } : { error: res.error, failed: res.failed },
     })
   }
   if (decision !== 'release' && !questions.length) {

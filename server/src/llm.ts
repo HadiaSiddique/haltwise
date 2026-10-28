@@ -94,6 +94,8 @@ export interface ChatResult {
   usage?: { prompt_tokens?: number; completion_tokens?: number }
   /** Models tried before this one in the fallback chain, with why they failed. */
   failed?: { model: string; error?: string }[]
+  /** True when a hedged call's backup model answered first. */
+  hedged?: boolean
 }
 
 const TIMEOUTS: Record<Role, number> = { nano: 15000, omni: 30000, super: 35000, ultra: 90000 }
@@ -115,6 +117,44 @@ export async function chat(opts: ChatOpts): Promise<ChatResult> {
     console.warn(`[llm] ${last.model} failed: ${last.error}`)
   }
   return last ? { ...last, failed } : { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: 'NEBIUS_API_KEY not set' }
+}
+
+/**
+ * Hedged call for paths a customer is waiting on. Starts the primary model; if it hasn't answered after
+ * `hedgeAfterMs`, or fails (e.g. HTTP 529 "worker overloaded"), starts the backup as well and returns the
+ * first valid answer. Added after Super took 2.2 s on one run and 21.7 s on the next for the same request.
+ */
+export function chatHedged(opts: ChatOpts & { backup: Role; hedgeAfterMs: number }): Promise<ChatResult> {
+  const { backup, hedgeAfterMs, ...base } = opts
+  return new Promise(resolve => {
+    let settled = false
+    let pending = 0
+    let backupStarted = false
+    const failed: { model: string; error?: string }[] = []
+    const finish = (r: ChatResult) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(r)
+    }
+    const launch = (role: Role, hedged: boolean) => {
+      pending++
+      chat({ ...base, role, noFallback: true }).then(r => {
+        pending--
+        if (r.ok) return finish({ ...r, hedged, failed: failed.length ? failed : undefined })
+        failed.push({ model: r.model, error: r.error })
+        if (!backupStarted) startBackup()
+        else if (pending === 0) finish({ ...r, failed })
+      })
+    }
+    const startBackup = () => {
+      if (backupStarted || settled) return
+      backupStarted = true
+      launch(backup, true)
+    }
+    const timer = setTimeout(startBackup, hedgeAfterMs)
+    launch(base.role, false)
+  })
 }
 
 async function callOnce(role: Role, opts: ChatOpts, plain = false): Promise<ChatResult> {

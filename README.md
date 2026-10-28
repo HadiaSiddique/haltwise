@@ -45,7 +45,17 @@ using **NVIDIA Nemotron** models. Nothing calls any other LLM provider.
 | super | `nvidia/nemotron-3-super-120b-a12b` | Inspector (text), Sentinel, Responder | Best multi-factor reasoning and careful multilingual wording. On our held-out benchmark it had a 1% false-positive rate vs Nano's 8%, with a lower median latency (1.2 s vs 2.3 s), so we moved the Inspector to it. |
 | nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Live Call Guard, Intel summaries, Radar naming, Inspector fallback | Short inputs where speed matters: Call Guard scores a transcript chunk in ~0.7-1 s while the scammer is still talking. |
 | ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | Investigator | Deepest model for long, audit-grade case files where latency matters less than rigour (~13 s per file). |
-| omni | Nemotron 3 Nano Omni: **not in the Token Factory catalogue** at build time (checked with `npm run models`, Oct 29 2026) | Inspector screenshots, payment-receipt reading | The code path is ready and switches on automatically if the model appears (or set `MODEL_OMNI`). `nvidia/Nemotron-3_5-Lightning` is listed but rejects image input, and no listed model accepts audio. |
+| omni | Nemotron 3 Nano Omni: **not in the Token Factory catalogue** at build time (checked with `npm run models`, Oct 29 2026) | Inspector screenshots, payment-receipt reading | The code path is ready and switches on automatically if the model appears (or set `MODEL_OMNI`). `nvidia/Nemotron-3_5-Lightning` is listed but rejects image input, and no listed model accepts audio. Until then, see "Screenshots without a vision model" below. |
+
+**Screenshots without a vision model.** When no Nemotron vision model is available, the customer's phone reads the
+characters in the screenshot itself (Tesseract OCR compiled to WebAssembly, `web/src/customer/Check.tsx`) and sends only
+that text. OCR does character recognition only; every judgement (risk, category, red flags, receipt fields) is made by
+Nemotron on Token Factory. Side benefit: the image never leaves the phone. If OCR finds no text, Haltwise says it
+could not check the image rather than calling it safe.
+
+**Hedged calls.** On paths a customer is waiting on (Inspector, Sentinel, Responder), if Super hasn't answered within
+4-5 s or returns an error such as HTTP 529, Nano is started in parallel and the first valid answer wins
+(`chatHedged` in `server/src/llm.ts`). The trace records which model answered and why.
 
 Run `npm run models` to list the exact IDs on your account and probe whether Omni accepts image and audio input.
 Results are written to `data/models.json`. Pin IDs with `MODEL_SUPER`, `MODEL_NANO`, `MODEL_OMNI`, `MODEL_ULTRA` if needed.

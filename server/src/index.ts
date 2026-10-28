@@ -9,7 +9,7 @@ import { seed, RAILS, CUSTOMER, PAYEE_DIRECTORY, DEMO_SCENARIOS, type RailId } f
 import { bus, Run, recentTrace, recentAudit } from './trace.ts'
 import { resolveModels, modelStatus, available, models } from './llm.ts'
 import { gate, policySummary } from './policy.ts'
-import { inspect, readReceipt } from './agents/inspector.ts'
+import { inspect, readReceipt, readReceiptText, INSPECTOR_ROLE } from './agents/inspector.ts'
 import { checkIndicator, reportingChannels, prewarmChannels, COUNTRIES } from './agents/intel.ts'
 import { assessTransfer, answerVerification, customerConfirm, officerDecision, getTransfer } from './agents/sentinel.ts'
 import { startCall, scoreChunk, issueNotice, activeNotice } from './agents/callguard.ts'
@@ -53,21 +53,24 @@ app.post('/api/check', async c => {
   const country = String(b.country ?? 'US')
   const urlInText = typeof b.text === 'string' ? b.text.match(/https?:\/\/[^\s)]+|\b[a-z0-9-]+\.(?:top|xyz|icu|live|click|shop|info|com|net|org)\/?\S*/i)?.[0] : undefined
   const url = b.url || urlInText
+  const ocr = b.ocr === true && typeof b.text === 'string'
   const plan = [
-    b.mode === 'receipt' ? 'inspector:receipt(omni)' : b.image ? 'inspector:screenshot(omni)' : 'inspector:text(nano)',
+    ...(ocr ? ['ocr(on-device, image not uploaded)'] : []),
+    b.mode === 'receipt' ? (b.image ? 'inspector:receipt(omni)' : 'inspector:receipt-fields(super)') : b.image ? 'inspector:screenshot(omni)' : `inspector:text(${INSPECTOR_ROLE})`,
     ...(b.phone ? ['intel:phone(tavily)'] : []),
     ...(url ? ['intel:url(tavily)'] : []),
   ]
   run.log('orchestrator', 'plan', { status: 'info', detail: { plan } })
 
   // Never score an unread image as "safe": without a vision model, say so and ask for the text.
-  if (b.image && !available.omni && !b.text) {
-    run.log('orchestrator', 'no Nemotron vision model on Token Factory: screenshot not analysed', { status: 'fallback', detail: { omni: models.omni } })
+  if ((b.image && !available.omni && !b.text) || (ocr && !b.text.trim())) {
+    run.log('orchestrator', ocr ? 'no text found in the image' : 'no Nemotron vision model on Token Factory: screenshot not analysed', { status: 'fallback', detail: { omni: models.omni } })
     return c.json({ unavailable: 'image', trace: run.steps })
   }
+  if (ocr) run.log('ocr', 'text read on the customer device (Tesseract, WebAssembly); image never uploaded', { status: 'info', detail: { chars: b.text.length } })
 
-  if (b.mode === 'receipt' && b.image) {
-    const fields = await readReceipt(run, b.image)
+  if (b.mode === 'receipt' && (b.image || ocr)) {
+    const fields = b.image ? await readReceipt(run, b.image) : await readReceiptText(run, b.text)
     const credits = db.prepare('SELECT * FROM credits WHERE account = ? ORDER BY ts DESC').all(CUSTOMER.code) as any[]
     const match = fields?.amount != null ? credits.find(cr => Math.abs(cr.amount - Number(fields.amount)) < 0.011) : undefined
     run.log('inspector', match ? 'receipt matches a real incoming credit' : 'no matching incoming credit', { status: match ? 'ok' : 'blocked', detail: { amount: fields?.amount, matched: match?.id ?? null } })

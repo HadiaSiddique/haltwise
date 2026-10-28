@@ -18,7 +18,7 @@ connection in Pakistan to `api.tokenfactory.us-central1.nebius.com`.
 2. **Inconsistent model ID casing in the catalogue:** `nvidia/Nemotron-3-Ultra-550b-a55b`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. Three conventions for one model family made auto-matching by pattern fiddly (we need case-insensitive regexes). Suggestion: one lowercase convention, or a `family`/`tier` field in `/models`.
 3. **No Nemotron vision/omni model available.** Nemotron 3 Nano Omni is not in this account's catalogue, and `nvidia/Nemotron-3_5-Lightning` is text-only. The only image-capable models listed are non-NVIDIA. For a hackathon that requires Nemotron, this removes screenshot and receipt analysis. Suggestion: list Nano Omni (or a Nemotron VL model), or say in the hackathon brief which modalities are available.
 4. **`/models` has no capability metadata.** We had to send a test image and a test WAV to find out what each model accepts. Suggestion: add `modalities`, `context_length`, `supports_json`, `supports_reasoning_toggle` to `/models`.
-5. **Latency spikes on Super.** The same Sentinel request (≈900 max tokens, JSON) took 2.2 s on one run and 21.7 s on the next. We now cap Sentinel at 12 s and fall back to Nano, then to templates. Suggestion: publish p50/p95 latency per model, or offer a priority tier for interactive apps.
+5. **Latency spikes on Super.** The same Sentinel request (≈900 max tokens, JSON) took 2.2 s on one run and 21.7 s on the next. We now hedge: if Super hasn't answered in 5 s (or errors), Nano starts in parallel and the first valid answer wins; templates cover the case where both fail. Suggestion: publish p50/p95 latency per model, or offer a priority tier for interactive apps.
 6. **Nemotron 3.5 Lightning without the thinking flag** put its reasoning ("Here's a thinking process: ...") directly in `content` and hit `finish_reason=length` on a 60-token test, while Nano/Super/Ultra returned clean JSON. Consistent reasoning handling across the family (always in `reasoning_content`) would help.
 
 7. **HTTP 529 "worker overloaded" on Super** during our benchmark (2 of 200 calls at concurrency 4). In the app, our fallback chain moves to Nano automatically. Suggestion: a `Retry-After` header on 529 so clients can back off precisely.
@@ -33,7 +33,7 @@ connection in Pakistan to `api.tokenfactory.us-central1.nebius.com`.
 - **Strong multilingual output.** Spanish verification questions and Arabic recovery plans read naturally and stayed on task.
 - **Follows "brake-only" framing well.** It never proposed moving money.
 - **Best Inspector in our benchmark:** 83.8% recall, 98.8% precision, 1.0% false-positive rate on a held-out SMS sample, median 1.2 s. Its misses were mostly ordinary marketing, not fraud.
-- Friction: on one English run it set `risky_answer` backwards ("Are you expecting to send this amount?" → risky "yes"). A one-line few-shot example in the prompt fixed it on later runs.
+- Friction: it repeatedly labelled `risky_answer` backwards on questions like "Is this payment for something you were expecting?" (risky = "yes"), even with a few-shot example. We stopped asking for the label: the prompt now requires every question to be phrased so that YES means danger, which Super followed in every run since.
 - Friction: it echoed our pseudonymisation codes (`PAYEE_B`) into customer-facing text. That's on us, but a note in model docs about placeholder handling would help. We now tell it not to and swap codes back in code.
 - Latency: see the spike above (2.2 s vs 21.7 s for the same request).
 
@@ -55,6 +55,7 @@ connection in Pakistan to `api.tokenfactory.us-central1.nebius.com`.
 
 ## Nemotron 3 Nano Omni
 - Not available in this account's Token Factory catalogue (see friction #3). Audio input is not accepted by any listed model (422 on `input_audio`).
+- Workaround we shipped: OCR on the customer's phone (Tesseract/WebAssembly), then Nemotron Super judges the text. It works for clean screenshots, but it loses what a vision model would catch: logos, layout, fake bank-app styling and edited-receipt artefacts. A Nemotron vision model on Token Factory would make this much stronger.
 
 ## Tavily
 - Used for: (1) "is this URL/number reported as a scam?" and (2) official fraud-reporting channels per country, with `include_domains` set to government/regulator domains.
