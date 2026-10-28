@@ -49,7 +49,8 @@ SEPA Instant, UPI, Raast, M-Pesa).
 
 ## Accomplishments
 
-- Measured, not claimed: _paste BENCHMARK.md table (recall, precision, false-positive rate, latency, Nano vs Super)_.
+- **Measured, not claimed.** On a held-out sample of the UCI SMS Spam Collection (100 spam + 100 legitimate, CC BY 4.0, run locally against Token Factory), the Inspector on Nemotron 3 Super caught 83.8% of spam with 98.8% precision and a 1.0% false-positive rate, at a median 1.2 s. Nano reached 87.0% recall with an 8.0% false-positive rate. The deterministic offline fallback caught 8% (0% false positives), which is why the models matter.
+- **The benchmark changed the product.** Nano's own "scam" label disagreed with its risk score (38% false positives using the label, 9% using the score), so Haltwise now decides from the score, and the Inspector moved to Super. We tuned on one sample and confirmed on a second, unseen one. Both runs are in BENCHMARK.md.
 - End-to-end demo runs even if a model times out: every agent has a rule-based fallback and the trace shows which one ran.
 
 ## Business model

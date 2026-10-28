@@ -6,9 +6,9 @@
  * Writes data/benchmark.json (shown in the Command Center) and BENCHMARK.md.
  * Numbers come only from this run. Nothing is estimated.
  */
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { resolveModels, chat, models, type Role } from '../src/llm.ts'
-import { SYSTEM } from '../src/agents/inspector.ts'
+import { SYSTEM, verdictOf } from '../src/agents/inspector.ts'
 import { ruleScore } from '../src/rules.ts'
 import { asData } from '../src/redact.ts'
 
@@ -19,6 +19,10 @@ const arg = (k: string, d: string) => {
 const N = Number(arg('n', '100')) // per class
 const ROLES = arg('models', 'nano,super').split(',').filter(r => r && r !== 'none') as Role[]
 const CONC = Number(arg('concurrency', '4'))
+// Different seeds draw different messages: use a new seed to test a rule on data it was not tuned on.
+const SEED = Number(arg('seed', '1234567'))
+// --exclude <raw json from an earlier run>: drop every message used there, so the new sample is truly unseen.
+const EXCLUDE = new Set<string>(arg('exclude', '') ? (JSON.parse(readFileSync(arg('exclude', ''), 'utf8')) as { text: string }[]).map(x => x.text) : [])
 
 interface Item {
   text: string
@@ -72,7 +76,7 @@ if (process.env.BENCH_DATASET2) {
 
 /** Deterministic stratified sample (same messages for every model). */
 function sample(items: Item[], n: number) {
-  let s = 1234567
+  let s = SEED
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647)
   const pick = (arr: Item[]) =>
     arr
@@ -118,36 +122,52 @@ function metrics(pred: (0 | 1 | null)[], gold: (0 | 1)[], lat: number[]) {
 await resolveModels()
 const results: any[] = []
 const dsMeta: any[] = []
+const raw: any[] = []
 for (const ds of DATASETS) {
   console.log(`\nLoading ${ds.name}…`)
   const all = await ds.load()
-  const items = sample(all, N)
+  const items = sample(all.filter(i => !EXCLUDE.has(i.text)), N)
+  if (EXCLUDE.size) console.log(`  excluded ${all.length - all.filter(i => !EXCLUDE.has(i.text)).length} messages used in an earlier run`)
   const gold = items.map(i => i.label)
   dsMeta.push({ name: ds.name, url: ds.url, license: ds.license, language: ds.language, total: all.length, sampled: items.length, positives: gold.filter(g => g === 1).length, negatives: gold.filter(g => g === 0).length })
 
   const rulePred = items.map(i => (ruleScore(i.text).score >= 30 ? 1 : 0) as 0 | 1)
-  results.push({ dataset: ds.name, model: 'rules', ...metrics(rulePred, gold, []) })
+  results.push({ dataset: ds.name, model: 'rules', threshold: 'rule score ≥ 30', ...metrics(rulePred, gold, []) })
   console.log('  rules baseline done')
 
   for (const role of ROLES) {
     const lat: number[] = []
     let done = 0
-    const pred = await pool(items, CONC, async it => {
+    const verdicts = await pool(items, CONC, async it => {
       const r = await chat({ role, system: SYSTEM('en'), user: asData('message', it.text) + '\nRespond with JSON only.', json: true, maxTokens: 700, noFallback: true })
       if (++done % 20 === 0) process.stdout.write(`  ${role}: ${done}/${items.length}\r`)
       if (!r.ok) return null
       lat.push(r.ms)
-      const v = r.json?.verdict
-      return (v === 'scam' || v === 'suspicious' ? 1 : 0) as 0 | 1
+      return { verdict: String(r.json?.verdict ?? ''), risk: Number(r.json?.risk_score ?? 0), category: String(r.json?.category ?? '') }
     })
-    const m = metrics(pred, gold, lat)
-    results.push({ dataset: ds.name, model: models[role], role, ...m })
-    console.log(`  ${models[role]}: recall ${fmt(m.recall)} precision ${fmt(m.precision)} FPR ${fmt(m.fpr)} p50 ${m.p50ms} ms errors ${m.errors}`)
+    raw.push(...items.map((it, i) => ({ dataset: ds.name, model: models[role], label: it.label, text: it.text, ...(verdicts[i] ?? { verdict: 'error' }) })))
+    // The model's own label (kept for transparency) vs. Haltwise's production rule, which reads the risk score:
+    // warn = risk ≥ 30 (caution shown), block = risk ≥ 60 (stop and verify).
+    const label = verdicts.map(v => (v ? ((v.verdict === 'scam' || v.verdict === 'suspicious' ? 1 : 0) as 0 | 1) : null))
+    const warn = verdicts.map(v => (v ? ((verdictOf(null, v.risk) !== 'likely_safe' ? 1 : 0) as 0 | 1) : null))
+    const block = verdicts.map(v => (v ? ((verdictOf(null, v.risk) === 'scam' ? 1 : 0) as 0 | 1) : null))
+    const points = [
+      ['model label: scam or suspicious', label],
+      ['production warn: risk ≥ 30', warn],
+      ['production block: risk ≥ 60', block],
+    ] as const
+    for (const [threshold, pred] of points) {
+      const m = metrics(pred, gold, lat)
+      results.push({ dataset: ds.name, model: models[role], role, threshold, ...m })
+      console.log(`  ${models[role]} [${threshold}]: recall ${fmt(m.recall)} precision ${fmt(m.precision)} FPR ${fmt(m.fpr)} p50 ${m.p50ms} ms errors ${m.errors}`)
+    }
   }
 }
 
-const out = { ranAt: new Date().toISOString(), where: 'local machine (Node script calling Nebius Token Factory)', perClass: N, positiveRule: 'verdict is "scam" or "suspicious"', datasets: dsMeta, results }
-mkdirSync('data', { recursive: true })
+const out = { ranAt: new Date().toISOString(), where: 'local machine (Node script calling Nebius Token Factory)', perClass: N, seed: SEED, excluded: EXCLUDE.size, positiveRule: 'production: warn = risk ≥ 30, block = risk ≥ 60; model label shown for comparison', datasets: dsMeta, results }
+mkdirSync('data/datasets', { recursive: true })
+// Per-message verdicts for error analysis (gitignored; dataset text stays out of the repo).
+writeFileSync('data/datasets/benchmark-raw.json', JSON.stringify(raw, null, 2))
 writeFileSync('data/benchmark.json', JSON.stringify(out, null, 2))
 writeFileSync('BENCHMARK.md', toMarkdown(out))
 console.log('\nWrote data/benchmark.json and BENCHMARK.md')
@@ -157,7 +177,7 @@ function fmt(x: number | null) {
 }
 
 function toMarkdown(o: typeof out) {
-  const rows = o.results.map(r => `| ${r.dataset} | \`${r.model}\` | ${fmt(r.recall)} | ${fmt(r.precision)} | ${fmt(r.fpr)} | ${fmt(r.f1)} | ${r.p50ms ?? '—'} | ${r.p95ms ?? '—'} | ${r.tp}/${r.fp}/${r.tn}/${r.fn} | ${r.errors} |`)
+  const rows = o.results.map(r => `| ${r.dataset} | \`${r.model}\` | ${r.threshold} | ${fmt(r.recall)} | ${fmt(r.precision)} | ${fmt(r.fpr)} | ${fmt(r.f1)} | ${r.p50ms ?? '—'} | ${r.p95ms ?? '—'} | ${r.tp}/${r.fp}/${r.tn}/${r.fn} | ${r.errors} |`)
   return `# Haltwise Inspector benchmark
 
 Generated by \`npm run benchmark\` on ${o.ranAt}. Ran on: ${o.where}.
@@ -169,15 +189,17 @@ ${o.datasets.map(d => `- **${d.name}** (${d.language}), licence ${d.license}, ${
 ## Method
 
 - Same Inspector system prompt as production (\`server/src/agents/inspector.ts\`), message wrapped as untrusted data.
-- A prediction is positive when the model's verdict is "scam" or "suspicious". Model fallback disabled, so each row is exactly one model.
+- Sample seed: ${o.seed}${o.excluded ? `; ${o.excluded} messages from the earlier tuning run excluded, so this sample is unseen` : ''}. Each row is exactly one model (fallback disabled).
+- **Production rule** (what the app does): the verdict comes from the model's risk score. **warn** = risk ≥ 30 (caution shown), **block** = risk ≥ 60 (stop and verify).
+- **Model label** row: the model's own "scam"/"suspicious" label, shown for comparison. On our first run (seed 1234567) Nano's label often contradicted its own score, so we switched production to the score. Because that rule was chosen after seeing that run, we confirm it on a fresh sample with a different seed.
 - Latency is wall-clock time per Token Factory call from the benchmark machine.
 - "rules" is Haltwise's deterministic multilingual rule set (score ≥ 30), used as the offline fallback.
 - Caveat: SMS spam includes marketing that is not fraud, so "recall" here means catching unwanted/scam texts, and some "false negatives" are benign promotions.
 
 ## Results
 
-| Dataset | Model | Recall | Precision | False-positive rate | F1 | p50 ms | p95 ms | TP/FP/TN/FN | Errors |
-|---|---|---|---|---|---|---|---|---|---|
+| Dataset | Model | Threshold | Recall | Precision | False-positive rate | F1 | p50 ms | p95 ms | TP/FP/TN/FN | Errors |
+|---|---|---|---|---|---|---|---|---|---|---|
 ${rows.join('\n')}
 `
 }

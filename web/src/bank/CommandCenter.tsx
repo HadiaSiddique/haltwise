@@ -616,6 +616,7 @@ function BenchmarkView() {
             <tr>
               <th>Dataset</th>
               <th>Model</th>
+              <th>Threshold</th>
               <th>Recall</th>
               <th>Precision</th>
               <th>False-positive rate</th>
@@ -632,6 +633,7 @@ function BenchmarkView() {
                 <td>
                   <span className={`model-chip ${r.model === 'rules' ? 'rules' : ''}`}>{r.model.replace('nvidia/', '')}</span>
                 </td>
+                <td className="small muted">{r.threshold ?? '—'}</td>
                 <td className="bold">{pct(r.recall)}</td>
                 <td className="bold">{pct(r.precision)}</td>
                 <td className="bold">{pct(r.fpr)}</td>
@@ -658,8 +660,8 @@ function SystemView() {
     get('/api/meta').then(setMeta).catch(() => {})
   }, [])
   const roles: [string, string][] = [
-    ['super', 'Sentinel, Responder (orchestration, verify questions, recovery plan)'],
-    ['nano', 'Inspector text, Live Call Guard, Intel summaries, Radar naming'],
+    ['super', 'Inspector text (benchmark winner), Sentinel, Responder'],
+    ['nano', 'Live Call Guard, Intel summaries, Radar naming, Inspector fallback'],
     ['omni', 'Inspector screenshots, payment-receipt reading'],
     ['ultra', 'Investigator audit-grade case files'],
   ]

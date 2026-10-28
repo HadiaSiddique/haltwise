@@ -21,6 +21,9 @@ connection in Pakistan to `api.tokenfactory.us-central1.nebius.com`.
 5. **Latency spikes on Super.** The same Sentinel request (≈900 max tokens, JSON) took 2.2 s on one run and 21.7 s on the next. We now cap Sentinel at 12 s and fall back to Nano, then to templates. Suggestion: publish p50/p95 latency per model, or offer a priority tier for interactive apps.
 6. **Nemotron 3.5 Lightning without the thinking flag** put its reasoning ("Here's a thinking process: ...") directly in `content` and hit `finish_reason=length` on a 60-token test, while Nano/Super/Ultra returned clean JSON. Consistent reasoning handling across the family (always in `reasoning_content`) would help.
 
+7. **HTTP 529 "worker overloaded" on Super** during our benchmark (2 of 200 calls at concurrency 4). In the app, our fallback chain moves to Nano automatically. Suggestion: a `Retry-After` header on 529 so clients can back off precisely.
+8. **JSON mode doesn't guarantee valid JSON when output is cut off.** One Super answer hit `finish_reason=length` mid-object and came back as broken JSON (`"verdict: suspicious category: ..."`). Expected, but a clear error, or structured-output mode that reserves room to close the object, would help.
+
 ### Suggestions
 - A "hackathon quickstart" page listing the exact Nemotron IDs available, their modalities, and a cURL for JSON mode with thinking off.
 - Per-key usage view broken down by model, so we can show judges cost per agent.
@@ -29,6 +32,7 @@ connection in Pakistan to `api.tokenfactory.us-central1.nebius.com`.
 - Used for: Sentinel (pause-and-verify questions, payee-check explanation), Responder (understanding the report, recovery plan).
 - **Strong multilingual output.** Spanish verification questions and Arabic recovery plans read naturally and stayed on task.
 - **Follows "brake-only" framing well.** It never proposed moving money.
+- **Best Inspector in our benchmark:** 83.8% recall, 98.8% precision, 1.0% false-positive rate on a held-out SMS sample, median 1.2 s. Its misses were mostly ordinary marketing, not fraud.
 - Friction: on one English run it set `risky_answer` backwards ("Are you expecting to send this amount?" → risky "yes"). A one-line few-shot example in the prompt fixed it on later runs.
 - Friction: it echoed our pseudonymisation codes (`PAYEE_B`) into customer-facing text. That's on us, but a note in model docs about placeholder handling would help. We now tell it not to and swap codes back in code.
 - Latency: see the spike above (2.2 s vs 21.7 s for the same request).
@@ -39,6 +43,8 @@ connection in Pakistan to `api.tokenfactory.us-central1.nebius.com`.
 - Correctly picked up "safe account", urgency and secrecy in Spanish call transcripts.
 - Friction: it flagged an ordinary Spanish bank-scam SMS as a *prompt injection* (`injection_attempt: true`) because the message asked the reader to move money. We tightened the definition in the prompt and now require corroboration from a rule-based detector.
 - Friction: asked to write a note in Arabic for Pakistan's reporting channel, it wrote Urdu. Reasonable guess for Pakistan, but not what was asked.
+- **Label vs. score mismatch (biggest finding).** On 200 SMS messages, Nano's `verdict` label often contradicted its own `risk_score`: "scam" at risk 10 on "sry can't talk on phone, with parents". Using its label gave a 37-38% false-positive rate; using its score gave 8-9% at nearly the same recall (confirmed on a held-out sample). Super did not show this. We now derive the verdict from the score for every model.
+- **Slower than Super on this task:** median 2.3 s vs Super's 1.2 s for the same prompt and messages. That was a surprise for a 3B-active model, so we moved the Inspector to Super (Nano stays as its fallback and runs Call Guard, where its inputs are short).
 - Quotes: it quotes the redacted text it saw (e.g. `+****0000`), which is correct behaviour. Our grounding check now accepts both forms.
 
 ## Nemotron 3 Ultra (`nvidia/Nemotron-3-Ultra-550b-a55b`)

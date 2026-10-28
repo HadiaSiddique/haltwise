@@ -19,7 +19,7 @@ run it on infrastructure it controls and customer messages never go to a closed 
 
 | Agent | Model | What it does |
 |---|---|---|
-| **Inspector** | Nemotron 3 Nano (text), Nemotron 3 Nano Omni (screenshots) | Scores pasted messages, screenshots, numbers and URLs: risk 0-100, FTC category, red flags *quoted from the message* (quotes not found in the message are dropped), detected language, plain explanation in the customer's language. Reads payment-receipt screenshots and compares them with incoming credits. |
+| **Inspector** | Nemotron 3 Super (text, Nano as fallback; chosen by benchmark), Nemotron 3 Nano Omni (screenshots, when available) | Scores pasted messages, screenshots, numbers and URLs: risk 0-100, FTC category, red flags *quoted from the message* (quotes not found in the message are dropped), detected language, plain explanation in the customer's language. Reads payment-receipt screenshots and compares them with incoming credits. |
 | **Intel** | Tavily + Nemotron 3 Nano | Is this number / URL / pattern reported as a scam? Cited sources only. Finds official fraud-reporting channels for the customer's country live; every URL must come from the search results and every phone number must appear verbatim in them, so no helpline is ever invented. |
 | **Sentinel** | Code scoring + Nemotron 3 Super | Scores every transfer (new payee, amount vs. usual, on a call, unmatched "bank" call, payee reported by other banks, pressure words, payee-check result, irreversible rail) → release / pause-and-verify / hold + verified callback. Super writes 2-3 verification questions in the customer's language. |
 | **Payee-check explainer** | inside Sentinel | Simulated Verification of Payee / Confirmation of Payee (match / close match / no match), explained in plain language with what this scam usually looks like. |
@@ -42,8 +42,8 @@ using **NVIDIA Nemotron** models. Nothing calls any other LLM provider.
 
 | Role | Model ID (resolved at startup from `GET /models`) | Used by | Why this model |
 |---|---|---|---|
-| super | `nvidia/nemotron-3-super-120b-a12b` | Sentinel, Responder | Best reasoning per token for multi-factor decisions and careful, multilingual customer wording. |
-| nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Inspector (text), Live Call Guard, Intel summaries, Radar naming | Fast and cheap: Call Guard scores a transcript chunk in ~0.7-1 s; Inspector runs on every message. |
+| super | `nvidia/nemotron-3-super-120b-a12b` | Inspector (text), Sentinel, Responder | Best multi-factor reasoning and careful multilingual wording. On our held-out benchmark it had a 1% false-positive rate vs Nano's 8%, with a lower median latency (1.2 s vs 2.3 s), so we moved the Inspector to it. |
+| nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Live Call Guard, Intel summaries, Radar naming, Inspector fallback | Short inputs where speed matters: Call Guard scores a transcript chunk in ~0.7-1 s while the scammer is still talking. |
 | ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | Investigator | Deepest model for long, audit-grade case files where latency matters less than rigour (~13 s per file). |
 | omni | Nemotron 3 Nano Omni: **not in the Token Factory catalogue** at build time (checked with `npm run models`, Oct 29 2026) | Inspector screenshots, payment-receipt reading | The code path is ready and switches on automatically if the model appears (or set `MODEL_OMNI`). `nvidia/Nemotron-3_5-Lightning` is listed but rejects image input, and no listed model accepts audio. |
 
@@ -90,7 +90,17 @@ npm start             # http://localhost:8787  (open /#/demo)
 
 Development with hot reload: `npm run dev` (web on http://localhost:5173, API on 8787).
 
-Benchmark: `npm run benchmark` (defaults: 100 spam + 100 legitimate messages, Nano and Super). Options: `-- --n 200 --models nano,super --concurrency 4`.
+Benchmark: `npm run benchmark` (defaults: 100 spam + 100 legitimate messages, Nano and Super). Options: `-- --n 200 --models nano,super --concurrency 4 --seed 987654321 --exclude data/datasets/benchmark-raw-seed1234567.json`.
+
+### Benchmark results (held-out sample, UCI SMS Spam Collection, CC BY 4.0, run locally)
+
+| Inspector | Recall | Precision | False-positive rate | Median latency |
+|---|---|---|---|---|
+| Rules only (offline fallback) | 8.0% | 100% | 0.0% | — |
+| Nemotron 3 Nano, production rule (risk ≥ 30) | 87.0% | 91.6% | 8.0% | 2.3 s |
+| Nemotron 3 Super, production rule (risk ≥ 30) | 83.8% | 98.8% | 1.0% | 1.2 s |
+
+Full method, the tuning run and error analysis: [BENCHMARK.md](BENCHMARK.md).
 
 ## Deploy (Render)
 
