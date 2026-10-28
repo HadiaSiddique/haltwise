@@ -98,13 +98,12 @@ export async function reportingChannels(run: Run, country: string, lang: string)
   }
   const name = COUNTRIES[country] ?? country
   const query = `official government website to report a scam or fraud in ${name}`
-  let s = await tavilySearch(query, { includeDomains: OFFICIAL_HINT[country], maxResults: 6 })
-  if (s.ok && !s.sources.length) s = await tavilySearch(query, { maxResults: 6 })
+  const s = await channelSearch(country)
   run.log('intel', `Tavily: official reporting channels (${country})`, {
     model: 'tavily',
     ms: s.ms,
     status: s.ok ? 'ok' : 'fallback',
-    detail: { query, results: s.sources.length, error: s.error },
+    detail: { query, results: s.sources.length, cached: !!s.cached, error: s.error },
   })
   if (!s.ok || !s.sources.length) return { channels: [], sources: [], live: false }
 
@@ -135,6 +134,24 @@ Only government, police, regulator or central-bank channels. Never invent phone 
   const out = { channels: channels.slice(0, 4), sources: s.sources.map((r: Source) => ({ title: r.title, url: r.url })) }
   kvSet(cacheKey, out)
   return { ...out, live: true }
+}
+
+const CHANNEL_CACHE_MS = 12 * 3600 * 1000
+
+/** Government domains first; if that is empty or slow, an open search. Real results are reused for 12h. */
+async function channelSearch(country: string) {
+  const query = `official government website to report a scam or fraud in ${COUNTRIES[country] ?? country}`
+  let s = await tavilySearch(query, { includeDomains: OFFICIAL_HINT[country], maxResults: 6, timeoutMs: 20000, preferCacheMs: CHANNEL_CACHE_MS })
+  if (!s.ok || !s.sources.length) s = await tavilySearch(query, { maxResults: 6, timeoutMs: 20000, preferCacheMs: CHANNEL_CACHE_MS })
+  return s
+}
+
+/** Warm the channel searches at startup so the Responder demo never waits on the network. */
+export async function prewarmChannels() {
+  for (const c of Object.keys(OFFICIAL_HINT)) {
+    const s = await channelSearch(c)
+    console.log(`[intel] prewarm ${c}: ${s.ok ? `${s.sources.length} sources${s.cached ? ' (cached)' : ''}` : s.error}`)
+  }
 }
 
 function safeHost(u: string) {

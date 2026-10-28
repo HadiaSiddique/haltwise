@@ -107,11 +107,15 @@ export async function assessTransfer(run: Run, input: TransferInput): Promise<As
     const res = await chat({
       role: 'super',
       maxTokens: 900,
+      // The customer is waiting on a paused payment: cap the wait, then Nano, then the template questions.
+      timeoutMs: 12000,
       system: `You are Sentinel, the payment-protection agent of a bank. You can only PAUSE or HOLD payments; you can never send money.
 Write for the customer in ${langName(input.lang)}, warm and plain, no jargon, no blame.
 Reply JSON only:
 {"message": "<1-2 sentences: why we paused, reassure that no money has left>",
- "questions": [{"id": "q1", "text": "<yes/no question>", "risky_answer": "yes"|"no"}, ...2 or 3 items, tailored to the risk factors],
+ "questions": [{"id": "q1", "text": "<yes/no question>", "risky_answer": "<the answer a scam victim would give>"}, ...2 or 3 items, tailored to the risk factors],
+Example: "Did someone on the phone tell you to make this payment?" -> risky_answer "yes"; "Have you paid this person before?" -> risky_answer "no".
+Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or company".
  "payee_explanation": "<if payee check is close_match or no_match: 2 sentences on what it means and why it matters; else empty>",
  "scam_pattern": "<1-2 sentences: what this kind of scam usually looks like>"}`,
       user: asData(
@@ -133,10 +137,12 @@ Reply JSON only:
     })
     if (res.ok && Array.isArray(res.json?.questions) && res.json.questions.length) {
       model = res.model
-      questions = res.json.questions.slice(0, 3).map((q: any, i: number) => ({ id: `q${i + 1}`, text: String(q.text), riskyAnswer: q.risky_answer === 'no' ? 'no' : 'yes' }))
-      payeeExplanation = String(res.json.payee_explanation ?? '')
-      scamPattern = String(res.json.scam_pattern ?? '')
-      message = String(res.json.message ?? '')
+      // Pseudonyms are for the model only: show the customer the name they typed.
+      const unmask = (s: unknown) => String(s ?? '').replace(/\bPAYEE_[A-Z0-9]+\b|\bUNKNOWN_PAYEE\b/g, input.payeeName || 'the payee').replace(/\bCUST_1\b/g, CUSTOMER.name.split(' ')[0])
+      questions = res.json.questions.slice(0, 3).map((q: any, i: number) => ({ id: `q${i + 1}`, text: unmask(q.text), riskyAnswer: String(q.risky_answer).toLowerCase() === 'no' ? 'no' : 'yes' }))
+      payeeExplanation = unmask(res.json.payee_explanation)
+      scamPattern = unmask(res.json.scam_pattern)
+      message = unmask(res.json.message)
     }
     run.log('sentinel', res.ok ? 'pause-and-verify questions written' : 'model unavailable, template questions', {
       model: res.model,

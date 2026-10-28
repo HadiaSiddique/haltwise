@@ -7,10 +7,10 @@ import { config } from './config.ts'
 import { db } from './db.ts'
 import { seed, RAILS, CUSTOMER, PAYEE_DIRECTORY, DEMO_SCENARIOS, type RailId } from './seed.ts'
 import { bus, Run, recentTrace, recentAudit } from './trace.ts'
-import { resolveModels, modelStatus } from './llm.ts'
+import { resolveModels, modelStatus, available, models } from './llm.ts'
 import { gate, policySummary } from './policy.ts'
 import { inspect, readReceipt } from './agents/inspector.ts'
-import { checkIndicator, reportingChannels, COUNTRIES } from './agents/intel.ts'
+import { checkIndicator, reportingChannels, prewarmChannels, COUNTRIES } from './agents/intel.ts'
 import { assessTransfer, answerVerification, customerConfirm, officerDecision, getTransfer } from './agents/sentinel.ts'
 import { startCall, scoreChunk, issueNotice, activeNotice } from './agents/callguard.ts'
 import { respond } from './agents/responder.ts'
@@ -59,6 +59,12 @@ app.post('/api/check', async c => {
     ...(url ? ['intel:url(tavily)'] : []),
   ]
   run.log('orchestrator', 'plan', { status: 'info', detail: { plan } })
+
+  // Never score an unread image as "safe": without a vision model, say so and ask for the text.
+  if (b.image && !available.omni && !b.text) {
+    run.log('orchestrator', 'no Nemotron vision model on Token Factory: screenshot not analysed', { status: 'fallback', detail: { omni: models.omni } })
+    return c.json({ unavailable: 'image', trace: run.steps })
+  }
 
   if (b.mode === 'receipt' && b.image) {
     const fields = await readReceipt(run, b.image)
@@ -255,3 +261,4 @@ const OPENAPI = {
 
 await resolveModels()
 serve({ fetch: app.fetch, port: config.port }, info => console.log(`[haltwise] http://localhost:${info.port}`))
+if (config.tavilyKey) prewarmChannels().catch(e => console.warn('[intel] prewarm failed', e))

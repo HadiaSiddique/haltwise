@@ -92,6 +92,8 @@ export interface ChatResult {
   ms: number
   error?: string
   usage?: { prompt_tokens?: number; completion_tokens?: number }
+  /** Models tried before this one in the fallback chain, with why they failed. */
+  failed?: { model: string; error?: string }[]
 }
 
 const TIMEOUTS: Record<Role, number> = { nano: 15000, omni: 30000, super: 35000, ultra: 90000 }
@@ -103,13 +105,16 @@ const TIMEOUTS: Record<Role, number> = { nano: 15000, omni: 30000, super: 35000,
 export async function chat(opts: ChatOpts): Promise<ChatResult> {
   const chain: Role[] = opts.noFallback ? [opts.role] : [opts.role, ...FALLBACK[opts.role]]
   let last: ChatResult | undefined
+  const failed: { model: string; error?: string }[] = []
   for (const role of chain) {
     if (!config.nebiusKey) break
     if (catalog.length && !available[role] && role !== opts.role) continue
     last = await callOnce(role, opts)
-    if (last.ok) return last
+    if (last.ok) return failed.length ? { ...last, failed } : last
+    failed.push({ model: last.model, error: last.error })
+    console.warn(`[llm] ${last.model} failed: ${last.error}`)
   }
-  return last ?? { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: 'NEBIUS_API_KEY not set' }
+  return last ? { ...last, failed } : { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: 'NEBIUS_API_KEY not set' }
 }
 
 async function callOnce(role: Role, opts: ChatOpts, plain = false): Promise<ChatResult> {
@@ -143,11 +148,12 @@ async function callOnce(role: Role, opts: ChatOpts, plain = false): Promise<Chat
     }
     const data = (await res.json()) as any
     const raw: string = data.choices?.[0]?.message?.content ?? ''
+    const finish: string = data.choices?.[0]?.finish_reason ?? '?'
     const text = stripThinking(raw)
     const out: ChatResult = { ok: true, text, model, role, ms: Date.now() - started, usage: data.usage }
     if (opts.json) {
       out.json = extractJson(text)
-      if (out.json === undefined) return { ...out, ok: false, error: 'model did not return JSON' }
+      if (out.json === undefined) return { ...out, ok: false, error: `no parseable JSON (finish=${finish}, ${text.length} chars: ${text.slice(0, 120)})` }
     }
     return out
   } catch (e) {

@@ -97,6 +97,8 @@ const S = {
   detected: ['Detected language', 'Idioma detectado', 'اللغة المكتشفة', 'पहचानी गई भाषा', 'پہچانی گئی زبان'],
   onCallNow: ['On a call: Call Guard active', 'En llamada: protección activa', 'في مكالمة: الحماية مفعلة', 'कॉल पर: कॉल गार्ड सक्रिय', 'کال پر: کال گارڈ فعال'],
   injection: ['This message tries to give orders to an AI. Haltwise refused.', 'Este mensaje intenta dar órdenes a una IA. Haltwise se negó.', 'تحاول هذه الرسالة إعطاء أوامر للذكاء الاصطناعي. رفض Haltwise.', 'यह संदेश AI को आदेश देने की कोशिश करता है। Haltwise ने मना किया।', 'یہ پیغام AI کو حکم دینے کی کوشش کرتا ہے۔ Haltwise نے انکار کیا۔'],
+  imageUnavailable: ['Screenshot reading is not available right now', 'La lectura de capturas no está disponible ahora', 'قراءة لقطات الشاشة غير متاحة حاليًا', 'स्क्रीनशॉट पढ़ना अभी उपलब्ध नहीं है', 'اسکرین شاٹ پڑھنا ابھی دستیاب نہیں'],
+  pasteInstead: ['We have not checked this image, so we cannot call it safe. Copy the text from it and use the Text tab.', 'No hemos revisado esta imagen, así que no podemos decir que sea segura. Copie el texto y use la pestaña Texto.', 'لم نفحص هذه الصورة، لذا لا يمكننا القول إنها آمنة. انسخ النص منها واستخدم تبويب النص.', 'हमने यह तस्वीर नहीं जांची, इसलिए इसे सुरक्षित नहीं कह सकते। इसका टेक्स्ट कॉपी करके टेक्स्ट टैब में डालें।', 'ہم نے یہ تصویر نہیں جانچی، اس لیے اسے محفوظ نہیں کہہ سکتے۔ اس کا متن کاپی کر کے متن والے ٹیب میں ڈالیں۔'],
   recent: ['Recent activity', 'Actividad reciente', 'النشاط الأخير', 'हाल की गतिविधि', 'حالیہ سرگرمی'],
 } as const
 

@@ -29,6 +29,7 @@ interface CheckResult {
   }
   intel?: { phone?: Intel; url?: Intel }
   receipt?: { fields: any; received: boolean; credit: { amount: number; currency: string; reference: string; ts: number; from: string } | null }
+  unavailable?: 'image'
   trace: TraceEvent[]
 }
 
@@ -111,6 +112,13 @@ export function CheckMessage() {
           t('analyse')
         )}
       </button>
+
+      {res?.unavailable === 'image' && (
+        <div className="verdict suspicious fade-in">
+          <h3>{t('imageUnavailable')}</h3>
+          <div className="small" style={{ marginTop: 6 }}>{t('pasteInstead')}</div>
+        </div>
+      )}
 
       {res?.receipt && (
         <div className={`verdict ${res.receipt.received ? 'likely_safe' : 'scam'} fade-in`}>

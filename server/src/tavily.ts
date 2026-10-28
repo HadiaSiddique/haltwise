@@ -20,10 +20,15 @@ const DAY = 24 * 3600 * 1000
 /** Tavily search with timeout and a cache of real past results, so a flaky network never breaks the demo. */
 export async function tavilySearch(
   query: string,
-  opts: { includeDomains?: string[]; maxResults?: number; depth?: 'basic' | 'advanced'; timeoutMs?: number } = {},
+  opts: { includeDomains?: string[]; maxResults?: number; depth?: 'basic' | 'advanced'; timeoutMs?: number; preferCacheMs?: number } = {},
 ): Promise<SearchResult> {
   const key = `tavily:${query}:${(opts.includeDomains ?? []).join(',')}`
   const started = Date.now()
+  // Slow-changing lookups (official reporting channels) reuse a recent real result instead of waiting on the network.
+  if (opts.preferCacheMs) {
+    const fresh = kvGet<Source[]>(key, opts.preferCacheMs)
+    if (fresh?.length) return { ok: true, sources: fresh, ms: 0, cached: true }
+  }
   if (!config.tavilyKey) {
     const cached = kvGet<Source[]>(key)
     return cached ? { ok: true, sources: cached, ms: 0, cached: true } : { ok: false, sources: [], ms: 0, error: 'TAVILY_API_KEY not set' }

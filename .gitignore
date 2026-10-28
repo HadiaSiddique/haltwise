@@ -5,3 +5,9 @@ data/*.db-*
 data/datasets/
 .env
 *.log
+
+# any local env/key files, whatever the name
+.env*
+!.env.example
+*.key
+

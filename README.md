@@ -43,9 +43,9 @@ using **NVIDIA Nemotron** models. Nothing calls any other LLM provider.
 | Role | Model ID (resolved at startup from `GET /models`) | Used by | Why this model |
 |---|---|---|---|
 | super | `nvidia/nemotron-3-super-120b-a12b` | Sentinel, Responder | Best reasoning per token for multi-factor decisions and careful, multilingual customer wording. |
-| nano | Nemotron 3 Nano (see `data/models.json`) | Inspector (text), Live Call Guard, Intel summaries, Radar naming | Fast and cheap: Call Guard scores a transcript chunk every few seconds; Inspector runs on every message. |
-| omni | Nemotron 3 Nano Omni | Inspector screenshots, payment-receipt reading | Multimodal: reads fake bank alerts, receipts and phishing pages from images. |
-| ultra | Nemotron 3 Ultra | Investigator | Deepest model for long, audit-grade case files where latency matters less than rigour. |
+| nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Inspector (text), Live Call Guard, Intel summaries, Radar naming | Fast and cheap: Call Guard scores a transcript chunk in ~0.7-1 s; Inspector runs on every message. |
+| ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | Investigator | Deepest model for long, audit-grade case files where latency matters less than rigour (~13 s per file). |
+| omni | Nemotron 3 Nano Omni: **not in the Token Factory catalogue** at build time (checked with `npm run models`, Oct 29 2026) | Inspector screenshots, payment-receipt reading | The code path is ready and switches on automatically if the model appears (or set `MODEL_OMNI`). `nvidia/Nemotron-3_5-Lightning` is listed but rejects image input, and no listed model accepts audio. |
 
 Run `npm run models` to list the exact IDs on your account and probe whether Omni accepts image and audio input.
 Results are written to `data/models.json`. Pin IDs with `MODEL_SUPER`, `MODEL_NANO`, `MODEL_OMNI`, `MODEL_ULTRA` if needed.

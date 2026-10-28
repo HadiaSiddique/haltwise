@@ -1,0 +1,58 @@
+{
+  "checkedAt": "2026-10-28T19:33:43.423Z",
+  "base": "https://api.tokenfactory.us-central1.nebius.com/v1/",
+  "nemotron": [
+    "nvidia/Nemotron-3-Ultra-550b-a55b",
+    "nvidia/nemotron-3-super-120b-a12b",
+    "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+    "nvidia/Nemotron-3_5-Lightning"
+  ],
+  "roles": {
+    "nano": {
+      "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+      "available": true,
+      "text": {
+        "status": 200,
+        "ms": 983,
+        "body": "{\"id\":\"chatcmpl-c7d8a0de-55ba-40a0-8b26-857643ede400\",\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"logprobs\":null,\"message\":{\"content\":\"\\n{\\\"ok\\\": true}\",\"refusal\":null,\"role\":\"assistant\",\"annotations\":null,\"audio\":null,\"function_call\":null,\"tool_calls\":[],\"reasoning\":\"The user wants a JSON only response: {\\\"ok\\\": true}. Must output exactly that JSON, no extra text. Ensure no extra whitespace? Pr"
+      }
+    },
+    "super": {
+      "id": "nvidia/nemotron-3-super-120b-a12b",
+      "available": true,
+      "text": {
+        "status": 200,
+        "ms": 919,
+        "body": "{\"id\":\"chatcmpl-915e930ad3ee6080\",\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"logprobs\":null,\"message\":{\"content\":\"\\n\\n{\\\"ok\\\": true}\",\"refusal\":null,\"role\":\"assistant\",\"annotations\":null,\"audio\":null,\"function_call\":null,\"tool_calls\":null,\"reasoning\":\"The user says \\\"Reply with JSON only: {\\\\\\\"ok\\\\\\\": true}\\\". They want a response that is exactly the JSON string, no extra text. So we must outpu"
+      }
+    },
+    "omni": {
+      "id": "nvidia/Nemotron-3_5-Lightning",
+      "available": true,
+      "text": {
+        "status": 200,
+        "ms": 627,
+        "body": "{\"id\":\"chatcmpl-a35724bb\",\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"logprobs\":null,\"message\":{\"content\":\"Here's a thinking process:\\n\\n1.  **Analyze User Input:**\\n   - User says: \\\"Reply with JSON only: {\\\"ok\\\": true}\\\"\\n   - This is a direct instruction to output a specific JSON object.\\n\\n2.  **Identify the Task:**\\n   - Output exactly `{\\\"\",\"refusal\":null,\"role\":\"assistant\",\"annotations\""
+      }
+    },
+    "ultra": {
+      "id": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "available": true,
+      "text": {
+        "status": 200,
+        "ms": 628,
+        "body": "{\"id\":\"chatcmpl-97361162b1aa7902\",\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"logprobs\":null,\"message\":{\"content\":\"{\\\"ok\\\": true}\",\"refusal\":null,\"role\":\"assistant\",\"annotations\":null,\"audio\":null,\"function_call\":null,\"tool_calls\":null,\"reasoning_content\":\"The user wants a JSON response with {\\\"ok\\\": true}. I need to output exactly that JSON object.\"},\"stop_reason\":null,\"token_ids\":null,\"routed_"
+      }
+    }
+  },
+  "omniImage": {
+    "status": 400,
+    "ms": 693,
+    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"This model does not support image input\",\"param\":\"messages\",\"code\":null},\"detail\":\"Invalid request. Please check the parameters and try again. Details: This model does not support image input\"}"
+  },
+  "omniAudio": {
+    "status": 422,
+    "ms": 1051,
+    "body": "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"body.messages.0.content.str: Input should be a valid string; body.messages.0.content.list[tagged-union[ChatCompletionContentPartTextParam,ChatCompletionContentPartImageParam,ChatCompletionContentPartVideoParam]].1: Input tag 'input_audio' found using 'type' does not match any of the expected tags: 'text', 'image_url', 'video_url'\",\"param\":null,\"c"
+  }
+}

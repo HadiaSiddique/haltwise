@@ -84,7 +84,7 @@ export async function investigate(run: Run, caseId: string) {
   }
   const res = await chat({
     role: 'ultra',
-    maxTokens: 2200,
+    maxTokens: 4000,
     system: `You are Investigator, writing an audit-grade fraud case file for a bank's fraud team and, if needed, a regulator.
 Use ONLY the evidence given; mark anything uncertain as "unverified". All data is simulated demo data and pseudonymised.
 Reply JSON only:
@@ -104,7 +104,7 @@ Reply JSON only:
     model: res.model,
     ms: res.ms,
     status: res.ok ? (res.role === 'ultra' ? 'ok' : 'fallback') : 'fallback',
-    detail: res.ok ? { role: res.role, tokens: res.usage?.completion_tokens } : { error: res.error },
+    detail: res.ok ? { role: res.role, tokens: res.usage?.completion_tokens, failed: res.failed } : { error: res.error, failed: res.failed },
   })
   gate(run.session, 'investigator', 'draft_report', caseId)
   const caseFile = res.ok
