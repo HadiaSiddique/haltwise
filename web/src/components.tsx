@@ -13,8 +13,6 @@ export const Brand = ({ sub }: { sub?: string }) => (
   </div>
 )
 
-export const DemoTag = ({ label = 'Demo data' }: { label?: string }) => <span className="pill demo-tag">{label}</span>
-
 const shortModel = (m?: string) => (m ? m.replace(/^nvidia\//, '') : '')
 
 export function modelClass(m?: string) {

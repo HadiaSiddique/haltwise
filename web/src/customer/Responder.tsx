@@ -32,7 +32,9 @@ export function Responder() {
   const [res, setRes] = useState<Result>()
   const [status, setStatus] = useState<{ status: string; data: { timeline: { ts: number; event: string }[] } }>()
 
-  useEffect(() => setCtry(country), [country])
+  useEffect(() => {
+    setCtry(country)
+  }, [country])
   useEffect(() => {
     if (!res) return
     const tick = () => get(`/api/cases/${res.caseId}`).then(setStatus).catch(() => {})

@@ -4,7 +4,7 @@ import { db, newId } from '../db.ts'
 import { PAYEE_DIRECTORY, RAILS, CUSTOMER, type RailId } from '../seed.ts'
 import { mask, redact, asData } from '../redact.ts'
 import { ruleScore } from '../rules.ts'
-import { t } from '../i18n.ts'
+import { t, inLanguage } from '../i18n.ts'
 import { gate } from '../policy.ts'
 import { createCase, updateCase } from '../cases.ts'
 import { calls } from './callguard.ts'
@@ -104,16 +104,18 @@ export async function assessTransfer(run: Run, input: TransferInput): Promise<As
   let message = ''
   let model = 'rules'
   if (decision !== 'release') {
-    const res = await chatHedged({
-      role: 'super',
-      maxTokens: 900,
-      // The customer is waiting on a paused payment: if Super is slow or overloaded, Nano races it;
-      // if both fail within 12 s, the template questions below are used.
-      timeoutMs: 12000,
-      backup: 'nano',
-      hedgeAfterMs: 5000,
-      system: `You are Sentinel, the payment-protection agent of a bank. You can only PAUSE or HOLD payments; you can never send money.
-Write for the customer in ${langName(input.lang)}, warm and plain, no jargon, no blame.
+    const L = langName(input.lang)
+    const ask = (strict: boolean) =>
+      chatHedged({
+        role: 'super',
+        maxTokens: 900,
+        // The customer is waiting on a paused payment: if Super is slow or overloaded, Nano races it;
+        // if both fail within 12 s, the template questions below are used.
+        timeoutMs: 12000,
+        backup: 'nano',
+        hedgeAfterMs: 5000,
+        system: `You are Sentinel, the payment-protection agent of a bank. You can only PAUSE or HOLD payments; you can never send money.
+Write for the customer: warm and plain, no jargon, no blame.
 Reply JSON only:
 {"message": "<1-2 sentences: why we paused, reassure that no money has left>",
  "questions": [{"id": "q1", "text": "<yes/no question where YES means danger>"}, ...2 or 3 items, tailored to the risk factors],
@@ -121,8 +123,9 @@ Reply JSON only:
  "scam_pattern": "<1-2 sentences: what this kind of scam usually looks like>"}
 Phrase EVERY question so that answering YES points to a scam. Good: "Did someone on the phone tell you to make this payment?",
 "Is this the first time you are paying this person or company?". Bad (YES means safe): "Have you paid this person before?".
-Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or company".`,
-      user: asData(
+Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or company".
+LANGUAGE: every string value MUST be written in ${L}${input.lang === 'en' ? '' : ` (not English; translate the examples above into ${L})`}.${strict ? ` Your previous answer was not in ${L}. Write ONLY in ${L}.` : ''}`,
+        user: asData(
         'transfer_context',
         JSON.stringify({
           rail: rail.label,
@@ -137,8 +140,16 @@ Never write codes like PAYEE_B or CUST_1; say "the payee" / "this person or comp
           decision,
         }),
       ),
-      json: true,
-    })
+        json: true,
+      })
+    const customerText = (r: Awaited<ReturnType<typeof ask>>) => [r.json?.message, ...(Array.isArray(r.json?.questions) ? r.json.questions.map((q: any) => q?.text) : [])].join(' ')
+    let res = await ask(false)
+    if (res.ok && !inLanguage(customerText(res), input.lang)) {
+      run.log('sentinel', `reply was not in ${L}: retrying`, { model: res.model, ms: res.ms, status: 'fallback' })
+      res = await ask(true)
+      // Still wrong: the hand-written translations below are better than the wrong language.
+      if (res.ok && !inLanguage(customerText(res), input.lang)) res = { ...res, ok: false, error: `model kept answering outside ${L}` }
+    }
     if (res.ok && Array.isArray(res.json?.questions) && res.json.questions.length) {
       model = res.model
       // Pseudonyms are for the model only: show the customer the name they typed.

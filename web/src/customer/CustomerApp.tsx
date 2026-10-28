@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { get, money } from '../api'
-import { Brand, DemoTag, Icons } from '../components'
+import { Brand, Icons } from '../components'
+import { useLiveAlerts } from '../site/Shell'
 import { LANGS, isRtl, tr, type Key, type Lang } from '../i18n'
 import { SendMoney } from './Send'
 import { CheckMessage } from './Check'
@@ -76,7 +77,6 @@ export function CustomerApp({ full }: { full?: boolean }) {
         <div className="phone-top">
           <Brand />
           <div className="row">
-            <DemoTag label={tr(lang, 'demoData')} />
             <select className="lang-select" value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label={tr(lang, 'language')}>
               {LANGS.map(l => (
                 <option key={l.code} value={l.code}>
@@ -121,12 +121,19 @@ function Home() {
   useEffect(() => {
     get(`/api/radar/alerts?country=${country}`).then(setAlerts).catch(() => setAlerts([]))
   }, [country])
+  // A real warning published this fortnight beats the sandbox campaign banner.
+  const live = useLiveAlerts(country).alerts[0]
   const r = meta?.rails[rail]
   return (
     <div className="col fade-in">
       <div className="balance-card">
-        <div className="small muted">
-          {t('hello')}, {meta?.customer.name.split(' ')[0] ?? '…'} · {meta?.customer.accountMasked}
+        <div className="row small muted" style={{ justifyContent: 'space-between' }}>
+          <span>
+            {t('hello')}, {meta?.customer.name.split(' ')[0] ?? '…'} · {meta?.customer.accountMasked}
+          </span>
+          <span className="tiny" title="Simulated account: no real money moves">
+            {t('sandboxAccount')}
+          </span>
         </div>
         <div className="small muted" style={{ marginTop: 10 }}>{t('balance')}</div>
         <div className="amt">{r ? money(r.balance, r.currency) : '—'}</div>
@@ -145,7 +152,19 @@ function Home() {
         </div>
       </div>
 
-      {alerts.slice(0, 1).map(a => (
+      {live && (
+        <a className="alert-banner fade-in" href={live.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+          <span style={{ width: 18, flex: 'none' }}>{Icons.alert}</span>
+          <div>
+            <b>{t('scamAlert')}:</b> {live.title}
+            <div className="tiny" style={{ opacity: 0.8, marginTop: 3 }}>
+              {live.howItWorks} · {live.publisher} ↗
+            </div>
+          </div>
+        </a>
+      )}
+
+      {!live && alerts.slice(0, 1).map(a => (
         <div className="alert-banner fade-in" key={a.name}>
           <span style={{ width: 18, flex: 'none' }}>{Icons.alert}</span>
           <div>

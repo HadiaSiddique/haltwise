@@ -54,10 +54,11 @@ export function clusterReports(hours = 24): Campaign[] {
     let bestSim = 0
     for (const c of clusters) {
       if (c.cat !== r.category) continue
-      const sim = jaccard(tk, c.centroid)
+      // Call reports are victims' own words, so wording varies; same scam type over the phone is one campaign.
+      const sim = r.channel === 'call' && c.items[0].channel === 'call' ? 1 : jaccard(tk, c.centroid)
       if (sim > bestSim) (bestSim = sim), (best = c)
     }
-    if (best && bestSim >= 0.3) best.items.push(r)
+    if (best && bestSim >= 0.2) best.items.push(r)
     else clusters.push({ cat: r.category, centroid: tk, items: [r] })
   }
   return clusters
@@ -69,7 +70,7 @@ export function clusterReports(hours = 24): Campaign[] {
       const id = `${c.cat}:${[...c.centroid].slice(0, 4).join('-')}`
       return {
         id,
-        name: kvGet<string>(`campaign-name:${id}`) ?? defaultName(c.cat),
+        name: kvGet<string>(`campaign-name:v2:${id}`) ?? `${defaultName(c.cat)} (${[...new Set(c.items.map(i => i.country))].join(', ')})`,
         category: c.cat,
         count: c.items.length,
         windowHours: Math.max(1, Math.round((last - first) / 3600_000)),
@@ -97,7 +98,7 @@ const defaultName = (cat: string) =>
 export async function nameCampaigns(run: Run) {
   const list = clusterReports()
   for (const c of list.slice(0, 6)) {
-    if (kvGet(`campaign-name:${c.id}`)) continue
+    if (kvGet(`campaign-name:v2:${c.id}`)) continue
     const res = await chat({
       role: 'nano',
       maxTokens: 60,
@@ -106,12 +107,14 @@ export async function nameCampaigns(run: Run) {
       user: asData('sample_report', c.sample),
     })
     if (res.ok && res.text) {
-      kvSet(`campaign-name:${c.id}`, res.text.replace(/["\n]/g, '').slice(0, 60))
+      kvSet(`campaign-name:v2:${c.id}`, capitalize(res.text.replace(/["\n]/g, '').trim().slice(0, 60)) + ` (${c.countries.join(', ')})`)
       run.log('radar', `campaign named: ${res.text.slice(0, 60)}`, { model: res.model, ms: res.ms, detail: { count: c.count } })
     }
   }
   return clusterReports()
 }
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export function addReport(r: { channel: string; category: string; text: string; country: string; indicator?: string }) {
   db.prepare('INSERT INTO reports (channel, category, text, country, indicator, ts) VALUES (?,?,?,?,?,?)').run(r.channel, r.category, r.text.slice(0, 500), r.country, r.indicator ?? 'n/a', Date.now())

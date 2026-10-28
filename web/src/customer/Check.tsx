@@ -26,6 +26,7 @@ interface CheckResult {
     injection: { suspected: boolean; blocked: { tool: string; reason: string }[] }
     extractedText?: string
     model: string
+    unverified?: boolean
   }
   intel?: { phone?: Intel; url?: Intel }
   receipt?: { fields: any; received: boolean; credit: { amount: number; currency: string; reference: string; ts: number; from: string } | null }
@@ -179,7 +180,14 @@ export function CheckMessage() {
         </div>
       )}
 
-      {v && (
+      {v?.unverified && (
+        <div className="verdict suspicious fade-in">
+          <h3>{t('noReportsFound')}</h3>
+          <p className="small" style={{ marginBottom: 0 }}>{t('notProofSafe')}</p>
+        </div>
+      )}
+
+      {v && !v.unverified && (
         <div className={`verdict ${v.verdict} fade-in`}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <h3>{t(v.verdict)}</h3>

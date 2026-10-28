@@ -2,7 +2,7 @@ import { chat, chatHedged, type ContentPart, type Role } from '../llm.ts'
 import { langName } from '../config.ts'
 import { asData, redact } from '../redact.ts'
 import { detectInjection, detectScriptLanguage, FTC_CATEGORIES, ruleScore, type Category } from '../rules.ts'
-import { t, tacticLabel } from '../i18n.ts'
+import { t, tacticLabel, inLanguage } from '../i18n.ts'
 import { gate } from '../policy.ts'
 import type { Run } from '../trace.ts'
 
@@ -86,7 +86,14 @@ export async function inspect(run: Run, input: InspectInput): Promise<Verdict> {
       ]
     : parts.join('\n') + '\nRespond with JSON only.'
   const req = { role, system: SYSTEM(lang) + (input.image ? IMAGE_ADDENDUM : ''), user, json: true, maxTokens: 1200 }
-  const res = input.image ? await chat(req) : await chatHedged({ ...req, timeoutMs: 15000, backup: INSPECTOR_ROLE === 'super' ? 'nano' : 'super', hedgeAfterMs: 4000 })
+  const call = (r: typeof req) => (input.image ? chat(r) : chatHedged({ ...r, timeoutMs: 15000, backup: INSPECTOR_ROLE === 'super' ? 'nano' : 'super', hedgeAfterMs: 4000 }))
+  let res = await call(req)
+  // The explanation is for the customer: if it came back in the wrong language, ask once more, firmly.
+  if (res.ok && res.json && !inLanguage(String(res.json.explanation ?? ''), lang)) {
+    run.log('inspector', `explanation not in ${langName(lang)}: retrying`, { model: res.model, ms: res.ms, status: 'fallback' })
+    const again = await call({ ...req, system: req.system + `\nYour previous answer was not in ${langName(lang)}. Write explanation, advice and every "why" ONLY in ${langName(lang)}.` })
+    if (again.ok && again.json) res = again
+  }
 
   let v: Verdict
   if (res.ok && res.json) {
@@ -101,11 +108,18 @@ export async function inspect(run: Run, input: InspectInput): Promise<Verdict> {
     // The model's flag needs corroboration from the detector, otherwise every scam would read as an attack.
     const injected = inj.suspected || (j.injection_attempt === true && inj.quotes.length > 0)
     const risk = injected ? Math.max(modelRisk, 85) : modelRisk
+    // Still not in the customer's language after a retry: use the hand-written translation instead of garbled text.
+    const explanationOk = inLanguage(String(j.explanation ?? ''), lang)
+    if (!explanationOk) {
+      const flagsText = rules.hits.map(h => tacticLabel(h.tactic, lang)).join(', ') || tacticLabel('link', lang)
+      j.explanation = verdictOf(null, risk) === 'likely_safe' ? t('fallbackSafe', lang) : t('fallbackScam', lang, { flags: flagsText })
+      j.advice = ''
+    }
     v = {
       risk,
       verdict: injected ? 'scam' : verdictOf(j.verdict, risk),
       category: FTC_CATEGORIES.includes(j.category) ? j.category : rules.category,
-      redFlags: kept.slice(0, 6),
+      redFlags: kept.slice(0, 6).map(f => (explanationOk || inLanguage(String(f.why), lang) ? f : { quote: f.quote, why: '' })),
       detectedLanguage: detectScriptLanguage(rawText) ?? String(j.detected_language ?? 'en').slice(0, 2),
       explanation: String(j.explanation ?? ''),
       advice: String(j.advice ?? ''),

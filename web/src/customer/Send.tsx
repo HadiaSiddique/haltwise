@@ -86,15 +86,15 @@ export function SendMoney() {
               ))}
           </select>
           <label className="label">{t('payeeName')}</label>
-          <input className="input" value={form.payeeName} onChange={e => setForm({ ...form, payeeName: e.target.value })} />
+          <input className="input" aria-label={t('payeeName')} value={form.payeeName} onChange={e => setForm({ ...form, payeeName: e.target.value })} />
           <label className="label">{r.payeeField}</label>
-          <input className="input mono" value={form.account} onChange={e => setForm({ ...form, account: e.target.value })} dir="ltr" />
+          <input className="input mono" aria-label={r.payeeField} value={form.account} onChange={e => setForm({ ...form, account: e.target.value })} dir="ltr" />
           <label className="label">
             {t('amount')} ({r.currency})
           </label>
-          <input className="input" inputMode="decimal" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} dir="ltr" />
+          <input className="input" aria-label={t('amount')} inputMode="decimal" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} dir="ltr" />
           <label className="label">{t('reference')}</label>
-          <input className="input" value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} />
+          <input className="input" aria-label={t('reference')} value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} />
         </div>
         <button className="btn primary block" disabled={busy || !form.account || !form.amount} onClick={submit}>
           {busy ? (

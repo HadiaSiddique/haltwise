@@ -214,7 +214,7 @@ export function CallGuard() {
           </button>
         ) : (
           <button className="btn grow" onClick={startListening}>
-            🎙 {t('listening').replace('…', '')}
+            🎙 {t('useMic')}
           </button>
         )}
         <button className="btn grow" onClick={simulate}>

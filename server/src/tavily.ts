@@ -5,6 +5,7 @@ export interface Source {
   title: string
   url: string
   content: string
+  published?: string
 }
 
 export interface SearchResult {
@@ -20,9 +21,9 @@ const DAY = 24 * 3600 * 1000
 /** Tavily search with timeout and a cache of real past results, so a flaky network never breaks the demo. */
 export async function tavilySearch(
   query: string,
-  opts: { includeDomains?: string[]; maxResults?: number; depth?: 'basic' | 'advanced'; timeoutMs?: number; preferCacheMs?: number } = {},
+  opts: { includeDomains?: string[]; maxResults?: number; depth?: 'basic' | 'advanced'; timeoutMs?: number; preferCacheMs?: number; topic?: 'general' | 'news'; days?: number } = {},
 ): Promise<SearchResult> {
-  const key = `tavily:${query}:${(opts.includeDomains ?? []).join(',')}`
+  const key = `tavily:${query}:${(opts.includeDomains ?? []).join(',')}:${opts.topic ?? ''}:${opts.days ?? ''}`
   const started = Date.now()
   // Slow-changing lookups (official reporting channels) reuse a recent real result instead of waiting on the network.
   if (opts.preferCacheMs) {
@@ -42,12 +43,14 @@ export async function tavilySearch(
         search_depth: opts.depth ?? 'basic',
         max_results: opts.maxResults ?? 5,
         include_domains: opts.includeDomains,
+        topic: opts.topic,
+        days: opts.topic === 'news' ? opts.days : undefined,
       }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 12000),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)
-    const data = (await res.json()) as { results?: { title: string; url: string; content: string }[] }
-    const sources = (data.results ?? []).map(r => ({ title: r.title, url: r.url, content: (r.content ?? '').slice(0, 700) }))
+    const data = (await res.json()) as { results?: { title: string; url: string; content: string; published_date?: string }[] }
+    const sources = (data.results ?? []).map(r => ({ title: r.title, url: r.url, content: (r.content ?? '').slice(0, 700), published: r.published_date }))
     kvSet(key, sources)
     return { ok: true, sources, ms: Date.now() - started }
   } catch (e) {

@@ -75,6 +75,32 @@ const T = {
   },
 } satisfies Record<string, Dict>
 
+const SCRIPT: Record<string, RegExp> = { ar: /[؀-ۿ]/g, ur: /[؀-ۿ]/g, hi: /[ऀ-ॿ]/g }
+const EN_WORDS = /\b(the|you|your|this|that|to|is|are|was|has|have|and|of|for|with|money|payment|account)\b/gi
+const ES_WORDS = /\b(el|la|los|las|su|sus|de|que|para|con|una?|es|está|dinero|pago|cuenta|usted|le)\b/gi
+
+/**
+ * Cheap check that model text is really in the customer's language. Super sometimes answered in English when asked
+ * for Spanish (English examples in the prompt pulled it over), so customer-facing text is verified before use.
+ */
+export function inLanguage(text: string, lang: string) {
+  const s = text.trim()
+  if (!s || lang === 'en') return true
+  const letters = (s.match(/\p{L}/gu) ?? []).length || 1
+  // Super once mixed Polish, Japanese and Russian fragments into an Urdu sentence; those scripts never belong here.
+  if (/[Ѐ-ӿ぀-ヿ一-鿿가-힯]/.test(s)) return false
+  if (SCRIPT[lang]) {
+    const prose = s.replace(/https?:\/\/\S+|\b[\w.-]+\.(com|net|org|top|xyz|icu|pk|in|uk)\b/gi, '')
+    const n = (prose.match(/\p{L}/gu) ?? []).length || 1
+    const latin = (prose.match(/[A-Za-zÀ-ɏ]/g) ?? []).length
+    // Urdu/Arabic must not drift into Devanagari and vice versa (seen: "माँگی" inside an Urdu sentence).
+    const wrongScript = lang === 'hi' ? /[؀-ۿ]/.test(prose) : /[ऀ-ॿ]/.test(prose)
+    return !wrongScript && latin / n <= 0.08 && (prose.match(SCRIPT[lang]) ?? []).length / n > 0.6
+  }
+  if (lang === 'es') return (s.match(ES_WORDS) ?? []).length >= (s.match(EN_WORDS) ?? []).length
+  return true
+}
+
 export function t(key: keyof typeof T, lang: string, vars: Record<string, string> = {}) {
   const d = T[key] as Dict
   let s = d[(lang as L) in d ? (lang as L) : 'en']

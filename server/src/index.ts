@@ -9,7 +9,7 @@ import { seed, RAILS, CUSTOMER, PAYEE_DIRECTORY, DEMO_SCENARIOS, type RailId } f
 import { bus, Run, recentTrace, recentAudit } from './trace.ts'
 import { resolveModels, modelStatus, available, models } from './llm.ts'
 import { gate, policySummary } from './policy.ts'
-import { inspect, readReceipt, readReceiptText, INSPECTOR_ROLE } from './agents/inspector.ts'
+import { inspect, readReceipt, readReceiptText, INSPECTOR_ROLE, type Verdict } from './agents/inspector.ts'
 import { checkIndicator, reportingChannels, prewarmChannels, COUNTRIES } from './agents/intel.ts'
 import { assessTransfer, answerVerification, customerConfirm, officerDecision, getTransfer } from './agents/sentinel.ts'
 import { startCall, scoreChunk, issueNotice, activeNotice } from './agents/callguard.ts'
@@ -17,6 +17,7 @@ import { respond } from './agents/responder.ts'
 import { investigate, muleCheck } from './agents/investigator.ts'
 import { clusterReports, nameCampaigns, addReport, alertsFor } from './agents/radar.ts'
 import { listCases, getCase } from './cases.ts'
+import { liveAlerts } from './agents/live.ts'
 
 seed()
 const app = new Hono()
@@ -90,6 +91,10 @@ app.post('/api/check', async c => {
       if (verdict.risk >= 75) verdict.verdict = 'scam'
     }
   }
+  // A bare number or link with no message and no reports proves nothing either way: never call it "safe".
+  const indicatorOnly = !b.text && !b.image && (b.phone || b.url)
+  const clean = [phoneIntel, urlIntel].every(i => !i || (i.reported !== 'yes' && !i.localReports && i.domainSignals.length < 2))
+  if (indicatorOnly && clean && verdict.verdict === 'likely_safe') (verdict as Verdict & { unverified?: boolean }).unverified = true
   if (verdict.verdict !== 'likely_safe' && b.report !== false) {
     addReport({ channel: b.image ? 'screenshot' : b.phone ? 'call' : 'sms', category: verdict.category, text: verdict.extractedText ?? b.text ?? b.url ?? b.phone ?? '', country, indicator: url ?? b.phone })
     bus.emit('event', { type: 'radar', data: {} })
@@ -175,6 +180,8 @@ app.post('/api/cases/:id/investigate', async c => {
   const run = new Run('command-center', c.req.param('id'))
   return c.json({ ...(await investigate(run, c.req.param('id'))), trace: run.steps })
 })
+
+app.get('/api/live-alerts', async c => c.json(await liveAlerts(new Run('live-intel'), (c.req.query('country') ?? 'US').toUpperCase())))
 
 app.get('/api/mule', c => c.json(muleCheck()))
 app.get('/api/radar', c => c.json(clusterReports()))

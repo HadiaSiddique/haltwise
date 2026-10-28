@@ -5,7 +5,7 @@ import { ruleScore, FTC_CATEGORIES } from '../rules.ts'
 import { gate } from '../policy.ts'
 import { createCase, updateCase, type Case } from '../cases.ts'
 import { reportingChannels } from './intel.ts'
-import { t } from '../i18n.ts'
+import { t, inLanguage } from '../i18n.ts'
 import type { Run } from '../trace.ts'
 
 /** "I've been scammed": contain damage first (brake-only tools), then guide recovery with real, cited channels. */
@@ -56,18 +56,27 @@ Reply JSON only: {"category": one of ${JSON.stringify(FTC_CATEGORIES)}, "money_s
 
   const intel = await reportingChannels(run, input.country, lang)
 
-  const steps = await chatHedged({
-    role: 'super',
-    backup: 'nano',
-    hedgeAfterMs: 5000,
-    timeoutMs: 15000,
-    maxTokens: 900,
-    system: `You are Responder. Write the customer's next steps in ${langName(lang)}: kind, short, numbered, max 6 steps.
+  const writePlan = (extra = '') =>
+    chatHedged({
+      role: 'super',
+      backup: 'nano',
+      hedgeAfterMs: 5000,
+      timeoutMs: 15000,
+      maxTokens: 900,
+      system: `You are Responder. Write the customer's next steps: kind, short, numbered, max 6 steps.
 Use ONLY the reporting channels provided (never invent phone numbers or websites). Include: keep evidence, do not pay "recovery" services,
-change passwords if codes were shared, remove remote-access apps if installed. Reply JSON: {"steps": ["..."], "comfort": "<one sentence>"}`,
-    user: JSON.stringify({ facts, country: input.country, channels: intel.channels }),
-    json: true,
-  })
+change passwords if codes were shared, remove remote-access apps if installed. Reply JSON: {"steps": ["..."], "comfort": "<one sentence>"}
+LANGUAGE: write every step and the comfort sentence in ${langName(lang)}.${extra}`,
+      user: JSON.stringify({ facts, country: input.country, channels: intel.channels }),
+      json: true,
+    })
+  let steps = await writePlan()
+  const planText = (r: typeof steps) => (Array.isArray(r.json?.steps) ? r.json.steps.join(' ') : '') + ' ' + (r.json?.comfort ?? '')
+  if (steps.ok && !inLanguage(planText(steps), lang)) {
+    run.log('responder', `plan not in ${langName(lang)}: retrying`, { model: steps.model, ms: steps.ms, status: 'fallback' })
+    const again = await writePlan(` Your previous answer was not in ${langName(lang)}. Write ONLY in ${langName(lang)}.`)
+    if (again.ok && inLanguage(planText(again), lang)) steps = again
+  }
   run.log('responder', steps.ok ? 'recovery plan written' : 'template recovery plan', { model: steps.model, ms: steps.ms, status: steps.ok ? 'ok' : 'fallback' })
 
   const plan = steps.ok && Array.isArray(steps.json?.steps) ? steps.json.steps.map(String) : []

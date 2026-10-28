@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, money, timeAgo, useStream, type AuditEvent, type TraceEvent } from '../api'
-import { Brand, DemoTag, Meter, Trace, riskColor } from '../components'
+import { Brand, Meter, Trace, riskColor } from '../components'
+import { LiveAlertsList } from '../site/Shell'
 
 type View = 'overview' | 'cases' | 'trace' | 'mule' | 'radar' | 'audit' | 'hack' | 'benchmark' | 'system'
 
@@ -29,7 +30,7 @@ const NAV: { id: View; label: string }[] = [
   { id: 'system', label: 'Models & policy' },
 ]
 
-export function CommandCenter() {
+export function CommandCenter({ embedded }: { embedded?: boolean }) {
   const [view, setView] = useState<View>('overview')
   const [trace, setTrace] = useState<TraceEvent[]>([])
   const [audit, setAudit] = useState<AuditEvent[]>([])
@@ -42,7 +43,9 @@ export function CommandCenter() {
     get<AuditEvent[]>('/api/audit?limit=150').then(setAudit).catch(() => {})
     get<Case[]>('/api/cases').then(setCases).catch(() => {})
   }
-  useEffect(loadAll, [])
+  useEffect(() => {
+    loadAll()
+  }, [])
   useStream((type, data) => {
     if (type === 'trace') setTrace(t => [data, ...t].slice(0, 300))
     if (type === 'audit') setAudit(a => [data, ...a].slice(0, 300))
@@ -58,12 +61,15 @@ export function CommandCenter() {
   return (
     <div className="cc">
       <aside className="cc-nav">
-        <div style={{ padding: '4px 10px 16px' }}>
-          <Brand sub="Command Center" />
-          <div style={{ marginTop: 8 }}>
-            <DemoTag />
+        {embedded ? (
+          <div className="tiny faint" style={{ padding: '4px 12px 12px', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
+            Bank console
           </div>
-        </div>
+        ) : (
+          <div style={{ padding: '4px 10px 16px' }}>
+            <Brand sub="Bank console" />
+          </div>
+        )}
         {NAV.map(n => (
           <button key={n.id} className={view === n.id ? 'on' : ''} onClick={() => (setView(n.id), n.id !== 'cases' && setOpenCase(undefined))}>
             {n.label}
@@ -393,7 +399,7 @@ function MuleView() {
   }, [])
   const a = rows.find(r => r.account === sel)
   return (
-    <Section title="Mule check: incoming credits (receiving bank)" right={<DemoTag />}>
+    <Section title="Mule check: incoming credits (receiving bank)" right={<span className="sandbox-chip"><i /> Sandbox accounts</span>}>
       <div className="small muted" style={{ marginBottom: 12 }}>
         Under UK APP reimbursement, sending and receiving banks share liability. Haltwise scores accounts that receive money: many unrelated senders, fast pass-through, crypto exits.
       </div>
@@ -488,6 +494,7 @@ function CampaignRow({ c, max }: { c: any; max: number }) {
 function RadarView({ tick }: { tick: number }) {
   const [list, setList] = useState<any[]>([])
   const [busy, setBusy] = useState(false)
+  const [country, setCountry] = useState('US')
   useEffect(() => {
     get('/api/radar').then(setList).catch(() => {})
   }, [tick])
@@ -500,10 +507,33 @@ function RadarView({ tick }: { tick: number }) {
         </button>
       }
     >
-      <div className="small muted" style={{ marginBottom: 12 }}>
-        Customer reports and flagged messages are clustered into campaigns. Customers in matching countries get a pre-warning banner in the app.
-      </div>
       <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <div>
+            <b>Live from the web</b>
+            <div className="small muted">Real scam warnings published in the last 14 days (Tavily news search, summarised by Nemotron).</div>
+          </div>
+          <div className="country-tabs" style={{ margin: 0 }}>
+            {['US', 'GB', 'IN', 'PK', 'KE', 'EU'].map(c => (
+              <button key={c} className={country === c ? 'on' : ''} onClick={() => setCountry(c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+        <LiveAlertsList country={country} limit={6} />
+      </div>
+      <div className="spacer" />
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+          <b>Reports from this bank’s customers</b>
+          <span className="sandbox-chip">
+            <i /> Sandbox reports
+          </span>
+        </div>
+        <div className="small muted" style={{ marginBottom: 8 }}>
+          Messages customers flag in the app are clustered into campaigns. Customers in matching countries get a pre-warning banner.
+        </div>
         {list.map(c => (
           <CampaignRow key={c.id} c={c} max={list[0]?.count ?? 1} />
         ))}
