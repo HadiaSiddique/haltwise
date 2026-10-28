@@ -48,7 +48,7 @@ SEPA Instant, UPI, Raast, M-Pesa).
 - **No Nemotron vision model on Token Factory.** Nano Omni wasn't in the catalogue and Nemotron 3.5 Lightning rejects images. Our first fallback scored an unread screenshot as "likely safe", which is the most dangerous possible answer. Now the phone reads the text on-device (OCR) and Nemotron judges it; if no text is found, Haltwise says it couldn't check rather than calling it safe.
 - **Latency spikes.** The same Super request took 2.2 s and then 21.7 s. We built hedged calls: Nano races Super after 5 s, first valid answer wins.
 - **The model's own label wasn't trustworthy.** Nano labelled benign texts "scam" while scoring them 10/100; Super flipped which answer was "risky" in its verification questions. We fixed both structurally (verdict from the score; questions phrased so YES always means danger) rather than with more prompting.
-- **Billing from Pakistan.** Token Factory's billing country list has no Pakistan.
+- **Billing from Pakistan.** Token Factory's billing country list has no Pakistan. It turned out the API key worked without completing billing, but nothing said so.
 
 ## Accomplishments
 
