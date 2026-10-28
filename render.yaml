@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: haltwise
+    runtime: node
+    plan: starter # free plan sleeps after 15 min idle; starter keeps the demo warm for judges
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NEBIUS_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: NEBIUS_BASE_URL
+        value: https://api.tokenfactory.us-central1.nebius.com/v1/
+      - key: NOTICE_SIGNING_SECRET
+        generateValue: true
+      - key: NEMOTRON_THINKING
+        value: "off"
