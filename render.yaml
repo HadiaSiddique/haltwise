@@ -2,7 +2,7 @@ services:
   - type: web
     name: haltwise
     runtime: node
-    plan: starter # free plan sleeps after 15 min idle; starter keeps the demo warm for judges
+    plan: free # sleeps after 15 min idle (first visit then takes ~1 min); switch to starter to keep it warm
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
