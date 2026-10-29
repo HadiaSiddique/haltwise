@@ -19,6 +19,8 @@ import { clusterReports, nameCampaigns, addReport, alertsFor } from './agents/ra
 import { listCases, getCase } from './cases.ts'
 import { liveAlerts } from './agents/live.ts'
 import { cors } from 'hono/cors'
+import { status as watchdogStatus, breachDrill, restore as restoreWatchdog, touchHoneytoken } from './watchdog.ts'
+import { makeDrills, recordScore, drillStats } from './agents/drills.ts'
 import { issueKey, verifyKey, meter, usageOf, signupAllowed } from './developers.ts'
 
 seed()
@@ -115,6 +117,8 @@ app.post('/api/transfer', async c => {
   const run = new Run(session(b, c))
   const rail = b.rail as RailId
   if (!RAILS[rail]) return c.json({ error: 'unknown rail' }, 400)
+  // Tripwire: the decoy account exists only to be noticed. Anyone paying to or from it is not a real customer flow.
+  if (String(b.account ?? '').replace(/\D/g, '').endsWith('9312')) touchHoneytoken('HT-ACCT-9312', session(b, c), 'transfer_money')
   run.log('orchestrator', 'plan', { status: 'info', detail: { plan: ['sentinel:score(code)', 'sentinel:payee-check', 'sentinel:verify-questions(super)'] } })
   const a = await assessTransfer(run, { rail, payeeName: String(b.payeeName ?? ''), account: String(b.account ?? ''), amount: Number(b.amount), reference: b.reference, lang: lang(b), callId: b.callId, guardianMode: !!b.guardianMode })
   return c.json({ ...a, trace: run.steps })
@@ -223,7 +227,25 @@ app.get('/api/benchmark', c => {
   return existsSync(p) ? c.json(JSON.parse(readFileSync(p, 'utf8'))) : c.json({ status: 'not run yet' })
 })
 
+/** Watchdog + breach drill (bank console). */
+app.get('/api/watchdog', c => c.json(watchdogStatus()))
+app.post('/api/watchdog/drill', async c => c.json(await breachDrill()))
+app.post('/api/watchdog/restore', c => c.json(restoreWatchdog('bank officer')))
+
+/** Scam IQ fire drills (customer app). */
+app.post('/api/drills', async c => {
+  const b = await c.req.json().catch(() => ({}))
+  const run = new Run(session(b, c))
+  return c.json({ ...(await makeDrills(run, lang(b), String(b.country ?? 'US'))), trace: run.steps })
+})
+app.post('/api/drills/score', async c => {
+  const b = await c.req.json().catch(() => ({}))
+  return c.json(recordScore(Number(b.score)))
+})
+app.get('/api/drills/stats', c => c.json(drillStats()))
+
 app.post('/api/admin/reset', c => {
+  restoreWatchdog('demo reset')
   seed(true)
   bus.emit('event', { type: 'reset', data: {} })
   return c.json({ ok: true })

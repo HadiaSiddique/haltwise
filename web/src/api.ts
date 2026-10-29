@@ -59,7 +59,7 @@ export function useStream(handler: Handler) {
   ref.current = handler
   useEffect(() => {
     const es = new EventSource('/api/stream')
-    for (const t of ['trace', 'audit', 'case', 'radar', 'notice', 'reset']) {
+    for (const t of ['trace', 'audit', 'case', 'radar', 'notice', 'reset', 'watchdog']) {
       es.addEventListener(t, e => ref.current(t, JSON.parse((e as MessageEvent).data)))
     }
     return () => es.close()

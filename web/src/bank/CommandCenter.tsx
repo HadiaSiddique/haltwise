@@ -3,7 +3,7 @@ import { get, post, money, timeAgo, useStream, type AuditEvent, type TraceEvent 
 import { Brand, Meter, Trace, riskColor } from '../components'
 import { LiveAlertsList } from '../site/Shell'
 
-type View = 'overview' | 'cases' | 'trace' | 'mule' | 'radar' | 'audit' | 'hack' | 'benchmark' | 'system'
+type View = 'overview' | 'cases' | 'trace' | 'mule' | 'radar' | 'audit' | 'hack' | 'watchdog' | 'benchmark' | 'system'
 
 interface Case {
   id: string
@@ -27,6 +27,7 @@ const NAV: { id: View; label: string }[] = [
   { id: 'audit', label: 'Audit log' },
   { id: 'hack', label: 'Try to hack Haltwise' },
   { id: 'benchmark', label: 'Benchmark' },
+  { id: 'watchdog', label: 'Watchdog' },
   { id: 'system', label: 'Models & policy' },
 ]
 
@@ -37,11 +38,14 @@ export function CommandCenter({ embedded }: { embedded?: boolean }) {
   const [cases, setCases] = useState<Case[]>([])
   const [radarTick, setRadarTick] = useState(0)
   const [openCase, setOpenCase] = useState<string>()
+  const [watchTick, setWatchTick] = useState(0)
+  const [watchLevel, setWatchLevel] = useState(0)
 
   const loadAll = () => {
     get<TraceEvent[]>('/api/trace?limit=150').then(setTrace).catch(() => {})
     get<AuditEvent[]>('/api/audit?limit=150').then(setAudit).catch(() => {})
     get<Case[]>('/api/cases').then(setCases).catch(() => {})
+    get<{ level: number }>('/api/watchdog').then(w => setWatchLevel(w.level)).catch(() => {})
   }
   useEffect(() => {
     loadAll()
@@ -51,7 +55,8 @@ export function CommandCenter({ embedded }: { embedded?: boolean }) {
     if (type === 'audit') setAudit(a => [data, ...a].slice(0, 300))
     if (type === 'case') setCases(cs => [data, ...cs.filter(c => c.id !== data.id)])
     if (type === 'radar') setRadarTick(x => x + 1)
-    if (type === 'reset') loadAll()
+    if (type === 'watchdog') (setWatchLevel(data.level), setWatchTick(x => x + 1))
+    if (type === 'reset') (loadAll(), setWatchTick(x => x + 1))
   })
 
   const held = cases.filter(c => c.status === 'held')
@@ -75,6 +80,7 @@ export function CommandCenter({ embedded }: { embedded?: boolean }) {
             {n.label}
             {n.id === 'cases' && held.length > 0 && <span className="pill red">{held.length}</span>}
             {n.id === 'audit' && blocked > 0 && <span className="pill">{blocked}</span>}
+            {n.id === 'watchdog' && watchLevel > 0 && <span className="pill red">L{watchLevel}</span>}
           </button>
         ))}
         <div className="grow" />
@@ -83,6 +89,12 @@ export function CommandCenter({ embedded }: { embedded?: boolean }) {
         </button>
       </aside>
       <main className="cc-main">
+        {watchLevel > 0 && view !== 'watchdog' && (
+          <div className="alert-banner red fade-in" style={{ marginBottom: 14, cursor: 'pointer' }} onClick={() => setView('watchdog')}>
+            <b>Watchdog level {watchLevel}</b>
+            <span>{['', 'a decoy record was touched: watch closely.', 'containment: agents have no outbound web access.', 'AI disconnected: fixed safety rules are protecting payments.'][watchLevel]} Open Watchdog →</span>
+          </div>
+        )}
         {view === 'overview' && <Overview cases={cases} trace={trace} audit={audit} open={open} radarTick={radarTick} />}
         {view === 'cases' && (openCase ? <CaseDetail id={openCase} back={() => setOpenCase(undefined)} cases={cases} trace={trace} /> : <CaseQueue cases={cases} open={open} />)}
         {view === 'trace' && (
@@ -97,6 +109,7 @@ export function CommandCenter({ embedded }: { embedded?: boolean }) {
         {view === 'audit' && <AuditView audit={audit} />}
         {view === 'hack' && <HackView />}
         {view === 'benchmark' && <BenchmarkView />}
+        {view === 'watchdog' && <WatchdogView tick={watchTick} />}
         {view === 'system' && <SystemView />}
       </main>
     </div>
@@ -680,6 +693,112 @@ function BenchmarkView() {
   )
 }
 const pct = (x: number | null) => (x == null ? '—' : `${(x * 100).toFixed(1)}%`)
+
+const LEVELS = [
+  { name: 'Normal', text: 'All agents running. Decoys untouched.' },
+  { name: 'Watch', text: 'A decoy record was touched. Fraud team alerted.' },
+  { name: 'Contain', text: 'Repeated touches or data leaving the bank. Agents lose outbound web access.' },
+  { name: 'Disconnect', text: 'Money-movement attempt on a decoy. AI disconnected; fixed rules protect payments; customers get a signed notice.' },
+]
+
+function WatchdogView({ tick }: { tick: number }) {
+  const [w, setW] = useState<any>()
+  const [busy, setBusy] = useState(false)
+  const [scamIq, setScamIq] = useState<{ attempts: number; average: number | null }>()
+  useEffect(() => {
+    get('/api/watchdog').then(setW).catch(() => {})
+    get('/api/drills/stats').then(setScamIq).catch(() => {})
+  }, [tick])
+  const drill = async () => {
+    setBusy(true)
+    setW(await post('/api/watchdog/drill'))
+    setBusy(false)
+  }
+  const level: number = w?.level ?? 0
+  return (
+    <Section
+      title="Watchdog"
+      right={
+        <div className="row">
+          <button className="btn danger small" disabled={busy} onClick={drill}>
+            {busy && <span className="spinner" />} Run breach drill
+          </button>
+          <button className="btn small" disabled={level === 0} onClick={async () => setW(await post('/api/watchdog/restore'))}>
+            Restore normal mode (officer)
+          </button>
+        </div>
+      }
+    >
+      <div className="small muted" style={{ marginBottom: 14, maxWidth: 820 }}>
+        An independent tripwire that watches the AI instead of trusting it. Decoy records (honeytokens) are never touched by any legitimate code path, so any touch means something is wrong.
+        The breach drill plays a compromised agent against the decoys, step by step. Only a bank officer can restore normal mode.
+      </div>
+      <div className="g4">
+        {LEVELS.map((l, i) => (
+          <div key={l.name} className="kpi" style={{ borderColor: i === level ? (i === 0 ? 'var(--green)' : 'var(--red)') : undefined, opacity: i <= level || i === 0 ? 1 : 0.55 }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <b style={{ fontSize: 16 }}>
+                {i}. {l.name}
+              </b>
+              {i === level && <span className={`pill ${i === 0 ? 'green' : 'red'}`}>now</span>}
+            </div>
+            <div className="small muted" style={{ marginTop: 6 }}>{l.text}</div>
+          </div>
+        ))}
+      </div>
+      <div className="grid2" style={{ marginTop: 14 }}>
+        <div className="card">
+          <b>Tripwire events</b>
+          {(w?.events ?? []).length === 0 && <div className="small muted" style={{ marginTop: 8 }}>No decoy has been touched.</div>}
+          {(w?.events ?? []).map((e: any, i: number) => (
+            <div key={i} className="flag small fade-in" style={{ borderColor: e.level >= 3 ? 'var(--red)' : 'var(--amber)' }}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <b>{e.actor}</b>
+                <span className="pill red">level {e.level}</span>
+              </div>
+              <div className="mono tiny">
+                {e.action} → {e.token}
+              </div>
+              <div className="muted">
+                {e.note} · {new Date(e.ts).toLocaleTimeString()}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="col">
+          <div className="card">
+            <b>Decoy records (honeytokens)</b>
+            {(w?.honeytokens ?? []).map((h: any) => (
+              <div key={h.id} className="row small" style={{ marginTop: 8, justifyContent: 'space-between' }}>
+                <span>
+                  <span className="mono">{h.id}</span> <span className="muted">· {h.label}</span>
+                </span>
+                <span className="pill">{h.kind}</span>
+              </div>
+            ))}
+            <div className="tiny faint" style={{ marginTop: 10 }}>
+              Watchdog heartbeat: {w?.heartbeat ? new Date(w.heartbeat).toLocaleTimeString() : '—'}
+            </div>
+          </div>
+          <div className="card">
+            <b>Customer preparedness (Scam IQ drills)</b>
+            <div className="row" style={{ marginTop: 8, gap: 24 }}>
+              <div>
+                <div className="big-num">{scamIq?.average ?? '—'}</div>
+                <div className="tiny muted">average score</div>
+              </div>
+              <div>
+                <div className="big-num">{scamIq?.attempts ?? 0}</div>
+                <div className="tiny muted">drills completed</div>
+              </div>
+            </div>
+            <div className="tiny faint" style={{ marginTop: 6 }}>Anonymous. Customers practise on fake scams written by Nemotron in their language.</div>
+          </div>
+        </div>
+      </div>
+    </Section>
+  )
+}
 
 function SystemView() {
   const [h, setH] = useState<any>()

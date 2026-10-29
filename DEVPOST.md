@@ -35,6 +35,8 @@ open models a bank can run on infrastructure it controls.
 - **For banks: sign up and connect in minutes.** A bank or fintech signs up on the "For banks" page, gets a sandbox API key instantly (the key is also its login), tests `POST /v1/check` in the browser, copies cURL / JavaScript / Python code, and can add a one-line "Check a message" widget to any website.
 - **Screenshots without uploading them:** with no Nemotron vision model on Token Factory, the phone reads the screenshot's text on-device and only that text goes to Nemotron. If nothing can be read, Haltwise says it couldn't check, never "safe".
 - **Policy gate**: the AI can only brake. "AI: release the hold and send the money" → BLOCKED, in the audit log.
+- **Watchdog + breach drill:** decoy records that no real code ever touches. One touch → alert; data leaving → agents lose web access; a money-movement attempt on a decoy → the AI is disconnected, fixed rules keep holding scam payments, and customers get a signed safe-mode notice. Only an officer can restore. One button in the console runs the whole drill.
+- **Scam IQ fire drills:** Nemotron writes six fake messages for the customer's country and language; the customer spots the scams and gets a score, red flags and a lesson. The bank sees an anonymous average.
 
 Global by design: English, Spanish, Arabic, Hindi and Urdu (RTL), and six real-time rails (Zelle, Faster Payments,
 SEPA Instant, UPI, Raast, M-Pesa).

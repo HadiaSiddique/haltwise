@@ -83,7 +83,7 @@ const ES_WORDS = /\b(el|la|los|las|su|sus|de|que|para|con|una?|es|está|dinero|p
  * Cheap check that model text is really in the customer's language. Super sometimes answered in English when asked
  * for Spanish (English examples in the prompt pulled it over), so customer-facing text is verified before use.
  */
-export function inLanguage(text: string, lang: string) {
+export function inLanguage(text: string, lang: string, maxLatin = 0.08) {
   const s = text.trim()
   if (!s || lang === 'en') return true
   const letters = (s.match(/\p{L}/gu) ?? []).length || 1
@@ -95,7 +95,7 @@ export function inLanguage(text: string, lang: string) {
     const latin = (prose.match(/[A-Za-zÀ-ɏ]/g) ?? []).length
     // Urdu/Arabic must not drift into Devanagari and vice versa (seen: "माँگی" inside an Urdu sentence).
     const wrongScript = lang === 'hi' ? /[؀-ۿ]/.test(prose) : /[ऀ-ॿ]/.test(prose)
-    return !wrongScript && latin / n <= 0.08 && (prose.match(SCRIPT[lang]) ?? []).length / n > 0.6
+    return !wrongScript && latin / n <= maxLatin && (prose.match(SCRIPT[lang]) ?? []).length / n > 1 - maxLatin - 0.32
   }
   if (lang === 'es') return (s.match(ES_WORDS) ?? []).length >= (s.match(EN_WORDS) ?? []).length
   return true

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { get, money } from '../api'
+import { get, money, useStream } from '../api'
 import { Brand, Icons } from '../components'
 import { useLiveAlerts } from '../site/Shell'
 import { LANGS, isRtl, tr, type Key, type Lang } from '../i18n'
@@ -8,6 +8,7 @@ import { CheckMessage } from './Check'
 import { CallGuard } from './CallGuard'
 import { Responder } from './Responder'
 import { TrustLog } from './Trust'
+import { ScamDrill } from './ScamDrill'
 
 export type RailId = 'zelle' | 'fps' | 'sepa' | 'upi' | 'raast' | 'mpesa'
 export interface Meta {
@@ -36,8 +37,8 @@ export interface Ctx {
 export const AppCtx = createContext<Ctx>(null as unknown as Ctx)
 export const useApp = () => useContext(AppCtx)
 
-type Tab = 'home' | 'send' | 'check' | 'call' | 'help' | 'trust'
-const TABS: { id: Tab; icon: JSX.Element }[] = [
+type Tab = 'home' | 'send' | 'check' | 'call' | 'help' | 'trust' | 'drill'
+const TABS: { id: Exclude<Tab, 'drill'>; icon: JSX.Element }[] = [
   { id: 'home', icon: Icons.home },
   { id: 'send', icon: Icons.send },
   { id: 'check', icon: Icons.check },
@@ -59,9 +60,16 @@ export function CustomerApp({ full }: { full?: boolean }) {
   const [rail, setRail] = useState<RailId>('fps')
   const [call, setCall] = useState<{ id: string; level: number } | null>(null)
   const [guardian, setGuardian] = useState(false)
+  // Watchdog safe mode (level 2+) is announced to customers in-app, the official channel.
+  const [safeLevel, setSafeLevel] = useState(0)
   useEffect(() => {
     get<Meta>('/api/meta').then(setMeta).catch(() => {})
+    get<{ level: number }>('/api/watchdog').then(w => setSafeLevel(w.level)).catch(() => {})
   }, [])
+  useStream((type, data) => {
+    if (type === 'watchdog') setSafeLevel(data.level)
+    if (type === 'reset') setSafeLevel(0)
+  })
   useEffect(() => {
     try {
       localStorage.setItem('hw-lang', lang)
@@ -86,6 +94,17 @@ export function CustomerApp({ full }: { full?: boolean }) {
             </select>
           </div>
         </div>
+        {safeLevel >= 2 && (
+          <div style={{ padding: '0 16px 8px' }}>
+            <div className="alert-banner red fade-in">
+              <span style={{ width: 18, flex: 'none' }}>{Icons.alert}</span>
+              <div>
+                <b>{tr(lang, 'safeMode')}</b> <span className="pill green">✓ {tr(lang, 'signedByBank')}</span>
+                <div className="tiny" style={{ marginTop: 3 }}>{tr(lang, 'safeModeText')}</div>
+              </div>
+            </div>
+          </div>
+        )}
         {call && (
           <div style={{ padding: '0 16px 8px' }}>
             <div className={`alert-banner ${call.level >= 2 ? 'red' : 'green'}`} onClick={() => setTab('call')} style={{ cursor: 'pointer' }}>
@@ -101,6 +120,7 @@ export function CustomerApp({ full }: { full?: boolean }) {
           {tab === 'call' && <CallGuard />}
           {tab === 'help' && <Responder />}
           {tab === 'trust' && <TrustLog />}
+          {tab === 'drill' && <ScamDrill />}
         </div>
         <nav className="tabbar">
           {TABS.map(x => (
@@ -222,6 +242,10 @@ function Home() {
         <button onClick={() => go('help')}>
           <span className="ico red">{Icons.help}</span>
           {t('beenScammed')}
+        </button>
+        <button onClick={() => go('drill')} style={{ gridColumn: 'span 2', flexDirection: 'row', alignItems: 'center' }}>
+          <span className="ico">{Icons.check}</span>
+          {t('scamIq')}
         </button>
       </div>
 

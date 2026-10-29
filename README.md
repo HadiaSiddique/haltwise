@@ -48,6 +48,19 @@ injection → BLOCKED with reason), public `POST /v1/check` API with an OpenAPI 
 (English, Spanish, Arabic, Hindi, Urdu, with RTL layout), six payment rails (Zelle, Faster Payments, SEPA Instant,
 UPI, Raast, M-Pesa).
 
+**Watchdog + breach drill** (`server/src/watchdog.ts`, bank console → Watchdog). Decoy records (honeytokens: a fake
+customer, a decoy account, a decoy admin key) are never touched by legitimate code, so any touch is a breach signal.
+Level 1 WATCH alerts the fraud team; level 2 CONTAIN cuts agents' outbound web access; level 3 DISCONNECT (a
+money-movement attempt on a decoy) switches every model call off (`server/src/guard.ts`), deterministic rules keep
+holding risky payments, and customers get a signed safe-mode notice in the app. Only a bank officer can restore.
+The "Run breach drill" button plays a compromised agent against the decoys step by step. On the free host the watchdog
+shares the process with its own timer and state; in production it would be a separate service.
+
+**Scam IQ fire drills** (customer app → Scam IQ drill). Nemotron writes six fake messages for the customer's country
+and language (four scams, two genuine); the customer answers one by one and gets red flags, a lesson and a score. If
+the model's drill breaks the rules or the language check, one retry, then a built-in English set. The bank sees an
+anonymous average score in the console.
+
 ## NVIDIA models, Token Factory features and Tavily calls
 
 All AI inference runs on **Nebius Token Factory** (OpenAI-compatible API, `https://api.tokenfactory.us-central1.nebius.com/v1/`)

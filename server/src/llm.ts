@@ -1,4 +1,5 @@
 import { config } from './config.ts'
+import { aiAllowed } from './guard.ts'
 
 /** The four Nemotron roles Haltwise uses. Exact IDs are resolved from Token Factory's /models at startup. */
 export type Role = 'super' | 'nano' | 'omni' | 'ultra'
@@ -105,6 +106,7 @@ const TIMEOUTS: Record<Role, number> = { nano: 15000, omni: 30000, super: 35000,
  * and model fallback. Never throws: callers check `ok` and use their own rule-based fallback.
  */
 export async function chat(opts: ChatOpts): Promise<ChatResult> {
+  if (!aiAllowed()) return { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: 'watchdog: AI disconnected (level 3 safe mode)' }
   const chain: Role[] = opts.noFallback ? [opts.role] : [opts.role, ...FALLBACK[opts.role]]
   let last: ChatResult | undefined
   const failed: { model: string; error?: string }[] = []

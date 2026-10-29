@@ -1,5 +1,6 @@
 import { config } from './config.ts'
 import { kvGet, kvSet } from './db.ts'
+import { webAllowed } from './guard.ts'
 
 export interface Source {
   title: string
@@ -25,6 +26,11 @@ export async function tavilySearch(
 ): Promise<SearchResult> {
   const key = `tavily:${query}:${(opts.includeDomains ?? []).join(',')}:${opts.topic ?? ''}:${opts.days ?? ''}`
   const started = Date.now()
+  // Watchdog level 2+: agents lose outbound web access. Earlier real results can still be served from cache.
+  if (!webAllowed()) {
+    const cached = kvGet<Source[]>(key)
+    return cached ? { ok: true, sources: cached, ms: 0, cached: true, error: 'watchdog: web access cut' } : { ok: false, sources: [], ms: 0, error: 'watchdog: web access cut (level 2+)' }
+  }
   // Slow-changing lookups (official reporting channels) reuse a recent real result instead of waiting on the network.
   if (opts.preferCacheMs) {
     const fresh = kvGet<Source[]>(key, opts.preferCacheMs)
