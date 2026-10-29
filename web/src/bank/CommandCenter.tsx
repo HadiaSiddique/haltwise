@@ -364,7 +364,7 @@ function CaseFile({ cf, mule }: { cf: any; mule?: any }) {
       <ul>
         {list(cf.timeline).map((x: any, i: number) => (
           <li key={i}>
-            <span className="mono tiny faint">{String(x.time).slice(11, 19)}</span> {x.event}
+            <span className="mono tiny faint">{isNaN(+new Date(x.time)) ? String(x.time) : new Date(x.time).toLocaleTimeString()}</span> {x.event}
           </li>
         ))}
       </ul>
