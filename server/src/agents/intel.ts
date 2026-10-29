@@ -3,6 +3,7 @@ import { langName } from '../config.ts'
 import { tavilySearch, type Source } from '../tavily.ts'
 import { db, kvGet, kvSet } from '../db.ts'
 import { asData } from '../redact.ts'
+import { liveAllowed, recordSnapshot, snapshot } from '../replay.ts'
 import type { Run } from '../trace.ts'
 
 export const COUNTRIES: Record<string, string> = {
@@ -121,7 +122,14 @@ export async function reportingChannels(run: Run, country: string, lang: string)
   const cached = kvGet<{ channels: Channel[]; sources: { title: string; url: string }[] }>(cacheKey, 6 * 3600 * 1000)
   if (cached) {
     run.log('intel', `reporting channels for ${country} (cached live result)`, { status: 'ok', model: 'tavily', detail: { channels: cached.channels.length } })
+    recordSnapshot(cacheKey, cached)
     return { ...cached, live: true }
+  }
+  // Channels Nemotron chose from a live search, recorded for when Token Factory can't be called (see replay.ts).
+  const recorded = snapshot<{ channels: Channel[]; sources: { title: string; url: string }[] }>(cacheKey)
+  if (recorded && !liveAllowed().ok) {
+    run.log('intel', `reporting channels for ${country} (recorded ${recorded.at.slice(0, 10)})`, { status: 'ok', model: 'tavily', detail: { channels: recorded.value.channels.length } })
+    return { ...recorded.value, live: true }
   }
   const name = COUNTRIES[country] ?? country
   const query = LOCAL_QUERY[country] ?? `official government website to report a scam or fraud in ${name}`
@@ -177,6 +185,7 @@ Never invent phone numbers or URLs.`,
   })
   const out = { channels: channels.slice(0, 4), sources: s.sources.map((r: Source) => ({ title: r.title, url: r.url })) }
   if (channels.length) kvSet(cacheKey, out)
+  if (channels.length && res.ok && !res.replayed) recordSnapshot(cacheKey, out)
   return { ...out, live: true }
 }
 

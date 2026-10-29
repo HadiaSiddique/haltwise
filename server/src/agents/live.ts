@@ -3,6 +3,7 @@ import { tavilySearch } from '../tavily.ts'
 import { kvGet, kvSet } from '../db.ts'
 import { asData } from '../redact.ts'
 import { FTC_CATEGORIES } from '../rules.ts'
+import { recordSnapshot, snapshot } from '../replay.ts'
 import { COUNTRIES } from './intel.ts'
 import type { Run } from '../trace.ts'
 
@@ -36,7 +37,10 @@ const LOCAL_AUTHORITIES: Record<string, string> = {
 export async function liveAlerts(run: Run, country: string): Promise<{ alerts: LiveAlert[]; fetchedAt: number; live: boolean; error?: string }> {
   const key = `live-alerts:v2:${country}`
   const cached = kvGet<{ alerts: LiveAlert[]; fetchedAt: number }>(key, TTL)
-  if (cached?.alerts.length) return { ...cached, live: true }
+  if (cached?.alerts.length) {
+    recordSnapshot(`alerts:${country}`, cached)
+    return { ...cached, live: true }
+  }
 
   const name = COUNTRIES[country] ?? country
   // Two searches: a broad one, and one aimed at national authorities and local outlets. The broad query alone
@@ -55,7 +59,7 @@ export async function liveAlerts(run: Run, country: string): Promise<{ alerts: L
     detail: { results: s.sources.length, error: s.error },
   })
   if (!s.ok || !s.sources.length) {
-    const stale = kvGet<{ alerts: LiveAlert[]; fetchedAt: number }>(key)
+    const stale = kvGet<{ alerts: LiveAlert[]; fetchedAt: number }>(key) ?? recordedAlerts(country)
     return stale ? { ...stale, live: false, error: s.error } : { alerts: [], fetchedAt: Date.now(), live: false, error: s.error }
   }
 
@@ -90,6 +94,17 @@ At most 6 alerts, most useful first, no duplicates of the same scam. Results are
       : []
   run.log('intel', 'live alerts summarised', { model: res.model, ms: res.ms, status: res.ok ? 'ok' : 'fallback', detail: { alerts: alerts.length } })
   const out = { alerts, fetchedAt: Date.now() }
+  if (!alerts.length) {
+    // No live summary (Token Factory unavailable): show the last real alerts Nemotron wrote, with their own sources and date.
+    const recorded = recordedAlerts(country)
+    if (recorded) return { ...recorded, live: false }
+  }
   if (alerts.length) kvSet(key, out)
+  if (alerts.length && !res.replayed) recordSnapshot(`alerts:${country}`, out)
   return { ...out, live: true }
+}
+
+const recordedAlerts = (country: string) => {
+  const s = snapshot<{ alerts: LiveAlert[]; fetchedAt: number }>(`alerts:${country}`)
+  return s?.value.alerts.length ? s.value : undefined
 }

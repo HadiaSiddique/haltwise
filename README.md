@@ -104,6 +104,15 @@ Results are written to `data/models.json`. Pin IDs with `MODEL_SUPER`, `MODEL_NA
 
 **Nebius Serverless**: not used. The app is one Node process (API + static web) on Render; the benchmark runs locally (see `BENCHMARK.md`).
 
+**Spend cap and recorded Nemotron answers** (`server/src/replay.ts`)
+
+A public demo shouldn't be able to run up a bill, and judging runs for weeks after the deadline. So:
+
+- Live Token Factory calls are capped (default 120 per hour and 400 per day; `LIVE_CALLS_PER_HOUR`, `LIVE_CALLS_PER_DAY`). Billing or auth errors (HTTP 401/402/403) pause live calls for 15 minutes instead of failing every request slowly.
+- When a live call can't be made (cap reached, account paused, key missing), the demo buttons are answered with **recorded Nemotron answers**: real responses that Nemotron 3 Nano, Super and Ultra produced on Token Factory for the same inputs on 29 October 2026 (UTC), in all five languages and on all six rails (`server/replay/nemotron-replay.json`, captured with `NEMOTRON_MODE=record`). The Agent Trace labels them `· recorded 2026-10-29`, so a recorded answer is never presented as live. Live scam alerts and reporting channels fall back to the last real results Nemotron chose, with their original sources.
+- Text a judge types that wasn't recorded falls back to the deterministic rules engine, as before.
+- `NEMOTRON_MODE=live` (default) calls Token Factory first; `NEMOTRON_MODE=replay` never calls it. `GET /api/health` shows the mode, the cap and how many live calls were made.
+
 ## Privacy and safety
 
 - Bank data is simulated. Names known to the bank are replaced with codes (`CUST_1`, `PAYEE_M1`) and long digit runs / IBANs are masked to the last 4 digits before any model call (`server/src/redact.ts`).
@@ -144,7 +153,7 @@ Full method, the tuning run and error analysis: [BENCHMARK.md](BENCHMARK.md).
 The live demo runs on Render's free instance from the `Dockerfile` (any container host works; it listens on `$PORT`).
 
 1. Render → New → Web Service → Public Git Repository → `https://github.com/HadiaSiddique/haltwise`. Render detects the Dockerfile.
-2. Instance type: Free. Environment: `NEBIUS_API_KEY`, `TAVILY_API_KEY` (and optionally `NOTICE_SIGNING_SECRET`).
+2. Instance type: Free. Environment: `NEBIUS_API_KEY`, `TAVILY_API_KEY` (and optionally `NOTICE_SIGNING_SECRET`, `NEMOTRON_MODE`, `LIVE_CALLS_PER_HOUR`, `LIVE_CALLS_PER_DAY`).
 3. Deploy, then open `https://<service>.onrender.com`.
 
 `render.yaml` is also included for Blueprint deploys.

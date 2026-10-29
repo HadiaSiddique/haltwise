@@ -23,6 +23,11 @@ export const config = {
   dbPath: process.env.DB_PATH ?? 'data/haltwise.db',
   signingSecret: process.env.NOTICE_SIGNING_SECRET ?? 'demo-signing-secret',
   thinking: (process.env.NEMOTRON_THINKING ?? 'off') === 'on',
+  /** live (default): call Token Factory, replay recorded answers if it fails. replay: never call it. record: save live answers. */
+  nemotronMode: (process.env.NEMOTRON_MODE ?? 'live') as 'live' | 'replay' | 'record',
+  /** Hard ceiling on live Token Factory calls, so a public demo can never run up a bill. */
+  liveCallsPerHour: Number(process.env.LIVE_CALLS_PER_HOUR ?? 120),
+  liveCallsPerDay: Number(process.env.LIVE_CALLS_PER_DAY ?? 400),
   modelOverrides: {
     super: process.env.MODEL_SUPER,
     nano: process.env.MODEL_NANO,

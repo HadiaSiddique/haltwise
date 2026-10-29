@@ -1,5 +1,6 @@
 import { config } from './config.ts'
 import { aiAllowed } from './guard.ts'
+import { budgetStatus, countLiveCall, liveAllowed, noteFailure, record, replay } from './replay.ts'
 
 /** The four Nemotron roles Haltwise uses. Exact IDs are resolved from Token Factory's /models at startup. */
 export type Role = 'super' | 'nano' | 'omni' | 'ultra'
@@ -97,28 +98,46 @@ export interface ChatResult {
   failed?: { model: string; error?: string }[]
   /** True when a hedged call's backup model answered first. */
   hedged?: boolean
+  /** True when this is a recorded Nemotron answer served because a live call wasn't possible (see replay.ts). */
+  replayed?: boolean
 }
 
 const TIMEOUTS: Record<Role, number> = { nano: 15000, omni: 30000, super: 35000, ultra: 90000 }
 
 /**
  * One OpenAI-compatible chat call to Token Factory with timeout, JSON extraction,
- * and model fallback. Never throws: callers check `ok` and use their own rule-based fallback.
+ * and model fallback. If no live call is possible (key missing, account paused, spend cap reached), a recorded
+ * Nemotron answer for the same input is served, labelled as recorded. Never throws: callers check `ok` and use
+ * their own rule-based fallback.
  */
 export async function chat(opts: ChatOpts): Promise<ChatResult> {
   if (!aiAllowed()) return { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: 'watchdog: AI disconnected (level 3 safe mode)' }
+  if (config.nemotronMode === 'record') {
+    // Same input, same answer while recording, so prompts built on this answer match on replay.
+    const seen = replay(opts, extractJson)
+    if (seen) return { ...seen, model: seen.model.replace(/ · recorded.*$/, '') }
+  }
   const chain: Role[] = opts.noFallback ? [opts.role] : [opts.role, ...FALLBACK[opts.role]]
   let last: ChatResult | undefined
   const failed: { model: string; error?: string }[] = []
+  const gate = liveAllowed()
   for (const role of chain) {
-    if (!config.nebiusKey) break
+    if (!config.nebiusKey || !liveAllowed().ok) break
     if (catalog.length && !available[role] && role !== opts.role) continue
+    countLiveCall()
     last = await callOnce(role, opts)
-    if (last.ok) return failed.length ? { ...last, failed } : last
+    if (last.ok) {
+      record(opts, last)
+      return failed.length ? { ...last, failed } : last
+    }
     failed.push({ model: last.model, error: last.error })
+    noteFailure(last.error)
     console.warn(`[llm] ${last.model} failed: ${last.error}`)
   }
-  return last ? { ...last, failed } : { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: 'NEBIUS_API_KEY not set' }
+  const recorded = replay(opts, extractJson)
+  if (recorded) return failed.length ? { ...recorded, failed } : recorded
+  const why = !config.nebiusKey ? 'NEBIUS_API_KEY not set' : gate.ok ? last?.error : gate.why
+  return last ? { ...last, failed } : { ok: false, text: '', model: 'none', role: opts.role, ms: 0, error: why }
 }
 
 /**
@@ -220,4 +239,4 @@ export function extractJson(s: string): any {
   }
 }
 
-export const modelStatus = () => ({ models, available, keySet: !!config.nebiusKey, nemotronCatalog: catalog.filter(id => /nemotron/i.test(id)) })
+export const modelStatus = () => ({ models, available, keySet: !!config.nebiusKey, nemotronCatalog: catalog.filter(id => /nemotron/i.test(id)), nemotron: budgetStatus() })
