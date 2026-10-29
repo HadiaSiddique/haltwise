@@ -123,6 +123,13 @@ function Home() {
   }, [country])
   // A real warning published this fortnight beats the sandbox campaign banner.
   const live = useLiveAlerts(country).alerts[0]
+  // Call-Match: genuine bank calls are announced here first, signed by the bank. A "bank" call with no notice is a red flag.
+  const [notices, setNotices] = useState<{ id: string; text: string; valid_from: number; valid_to: number }[]>([])
+  useEffect(() => {
+    get<{ active?: any; upcoming: any[] }>('/api/notices')
+      .then(n => setNotices([...(n.active ? [n.active] : []), ...n.upcoming].slice(0, 2)))
+      .catch(() => {})
+  }, [])
   const r = meta?.rails[rail]
   return (
     <div className="col fade-in">
@@ -163,6 +170,31 @@ function Home() {
           </div>
         </a>
       )}
+
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <b className="small">{t('bankNotices')}</b>
+          <span className="pill green">✓ {t('signedByBank')}</span>
+        </div>
+        {notices.length ? (
+          notices.map(n => {
+            const now = Date.now()
+            const isNow = n.valid_from <= now && now <= n.valid_to
+            const when = new Date(n.valid_from)
+            return (
+              <div key={n.id} className="small" style={{ marginTop: 8 }}>
+                <span className={`pill ${isNow ? 'accent' : ''}`}>
+                  {isNow ? t('callingNow') : `${t('scheduledCall')} · ${when.toLocaleDateString(undefined, { weekday: 'short' })} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                </span>
+                <div className="muted" style={{ marginTop: 4 }}>{n.text}</div>
+              </div>
+            )
+          })
+        ) : (
+          <div className="small muted" style={{ marginTop: 6 }}>{t('noNotice')}</div>
+        )}
+        <div className="tiny faint" style={{ marginTop: 8 }}>{t('noticeHint')}</div>
+      </div>
 
       {!live && alerts.slice(0, 1).map(a => (
         <div className="alert-banner fade-in" key={a.name}>
