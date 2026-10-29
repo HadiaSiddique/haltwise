@@ -121,8 +121,8 @@ export async function inspect(run: Run, input: InspectInput): Promise<Verdict> {
       category: FTC_CATEGORIES.includes(j.category) ? j.category : rules.category,
       redFlags: kept.slice(0, 6).map(f => (explanationOk || inLanguage(String(f.why), lang) ? f : { quote: f.quote, why: '' })),
       detectedLanguage: detectScriptLanguage(rawText) ?? String(j.detected_language ?? 'en').slice(0, 2),
-      explanation: String(j.explanation ?? ''),
-      advice: String(j.advice ?? ''),
+      explanation: cleanText(j.explanation),
+      advice: cleanText(j.advice),
       injection: { ...inj, suspected: injected, blocked: [] },
       extractedText: j.extracted_text,
       imageType: j.image_type,
@@ -171,6 +171,13 @@ export async function inspect(run: Run, input: InspectInput): Promise<Verdict> {
   if (v.verdict !== 'likely_safe') gate(run.session, 'inspector', 'flag_message', 'message')
   return v
 }
+
+/** Super once returned a value that began with a leaked JSON key (`explanation": "...`); strip such fragments. */
+const cleanText = (s: unknown) =>
+  String(s ?? '')
+    .replace(/^\s*"?(explanation|advice|why|summary)"?\s*:\s*"?/i, '')
+    .replace(/"\s*,?\s*$/, '')
+    .trim()
 
 const clamp = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 50)
 

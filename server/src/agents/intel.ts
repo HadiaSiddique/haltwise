@@ -24,7 +24,7 @@ const OFFICIAL_HINT: Record<string, string[]> = {
   GB: ['actionfraud.police.uk', 'gov.uk', 'ncsc.gov.uk', 'fca.org.uk', 'reportfraud.police.uk'],
   EU: ['europa.eu', 'europol.europa.eu'],
   ES: ['incibe.es', 'policia.es', 'guardiacivil.es', 'bde.es'],
-  IN: ['cybercrime.gov.in', 'sancharsaathi.gov.in', 'rbi.org.in'],
+  IN: ['cybercrime.gov.in', 'sancharsaathi.gov.in', 'i4c.mha.gov.in'],
   PK: ['fia.gov.pk', 'nccia.gov.pk', 'sbp.org.pk', 'pta.gov.pk'],
   KE: ['ca.go.ke', 'centralbank.go.ke', 'dci.go.ke', 'ke-cirt.go.ke'],
   AE: ['dubaipolice.gov.ae', 'adpolice.gov.ae', 'moi.gov.ae', 'tdra.gov.ae', 'u.ae'],
@@ -117,7 +117,7 @@ export interface Channel {
  * so the model cannot invent a helpline.
  */
 export async function reportingChannels(run: Run, country: string, lang: string): Promise<{ channels: Channel[]; sources: { title: string; url: string }[]; live: boolean }> {
-  const cacheKey = `channels:v5:${country}:${lang}`
+  const cacheKey = `channels:v6:${country}:${lang}`
   const cached = kvGet<{ channels: Channel[]; sources: { title: string; url: string }[] }>(cacheKey, 6 * 3600 * 1000)
   if (cached) {
     run.log('intel', `reporting channels for ${country} (cached live result)`, { status: 'ok', model: 'tavily', detail: { channels: cached.channels.length } })
@@ -158,9 +158,13 @@ Never invent phone numbers or URLs.`,
       .filter(c => c?.url && (urls.has(c.url) || hosts.has(safeHost(c.url))) && !NOT_A_REPORTING_PAGE.test(c.url) && isOfficialHost(c.url))
       .map(c => ({ ...c, phone: c.phone && corpus.replace(/\s/g, '').includes(String(c.phone).replace(/\s/g, '')) ? c.phone : undefined }))
       // One link, one entry: the model sometimes gives the same URL two different names.
-      .filter((c, i, all) => all.findIndex(x => x.url === c.url) === i)
+      .filter((c, i, all) => all.findIndex(x => sameUrl(x.url, c.url)) === i)
   }
-  // No guessing: if nothing qualifies, the customer is told to call the number on their card instead.
+  // The model sometimes proposes only pages the code rejects (e.g. central-bank publications). Rather than show
+  // nothing, fall back to search results that pass the same official-host and not-an-article checks.
+  if (!channels.length)
+    channels = s.sources.filter(r => isOfficialHost(r.url) && !NOT_A_REPORTING_PAGE.test(r.url) && !/publication|annual.?report|report.?publications/i.test(r.url)).slice(0, 3).map(r => ({ name: r.title, url: r.url }))
+  // No guessing: if still nothing qualifies, the customer is told to call the number on their card instead.
   run.log('intel', 'channels verified against sources', {
     model: res.model,
     ms: res.ms,
@@ -175,6 +179,7 @@ Never invent phone numbers or URLs.`,
 const CHANNEL_CACHE_MS = 12 * 3600 * 1000
 const LOCAL_QUERY: Record<string, string> = {
   ES: 'denunciar estafa o fraude online sitio oficial Policía Nacional Guardia Civil INCIBE 017',
+  IN: 'report cyber fraud National Cyber Crime Reporting Portal cybercrime.gov.in helpline 1930 Chakshu Sanchar Saathi',
   MX: 'denunciar fraude o estafa sitio oficial gobierno de México',
 }
 /**
@@ -182,6 +187,12 @@ const LOCAL_QUERY: Record<string, string> = {
  * "how to report a scammer" page for the UAE; code, not the model, decides what counts as official.
  */
 const GOV_HOST = /(^|\.)(gov|gob|gouv|govt|go|gc|police|politie|polizei)\.[a-z.]+$|\.gov$|\.gov\.[a-z]{2}$|(^|\.)europa\.eu$|\.police\.uk$/i
+/** "https://www.x.gov.in/" and "https://x.gov.in" are the same channel. */
+const sameUrl = (a: string, b: string) => {
+  const n = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')
+  return n(a) === n(b)
+}
+
 export function isOfficialHost(u: string) {
   const host = safeHost(u)
   return GOV_HOST.test(host) || Object.values(OFFICIAL_HINT).flat().some(d => host === d || host.endsWith(`.${d}`))
