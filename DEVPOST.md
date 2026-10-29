@@ -43,7 +43,7 @@ SEPA Instant, UPI, Raast, M-Pesa).
 
 ## How we built it
 
-- **Models (all NVIDIA Nemotron on Nebius Token Factory):** Nano for high-volume, low-latency checks (every message, every call chunk); Nano Omni for screenshots and receipts; Super for decisions and careful multilingual customer wording; Ultra for long, audit-grade case files.
+- **Models (all NVIDIA Nemotron on Nebius Token Factory):** Nano for high-volume, low-latency checks (every message, every call chunk); Super for decisions and careful multilingual customer wording; Ultra for long, audit-grade case files.
 - **Why open models matter for banks:** customer messages and call transcripts are some of the most sensitive data a bank holds. With open weights, a bank can run Haltwise in its own cloud or data centre, audit the model, and avoid sending customer conversations to a closed AI vendor.
 - **Tavily:** live scam-report lookups and official reporting channels per country, with code that keeps only URLs from the results and phone numbers that appear verbatim in them.
 - **Stack:** Node + TypeScript (Hono), SQLite (`node:sqlite`), Server-Sent Events for the live Agent Trace, React + Vite. One service on Render.
