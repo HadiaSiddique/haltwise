@@ -23,6 +23,7 @@ run it on infrastructure it controls and customer messages never go to a closed 
 
 - **Live demo: https://haltwise.onrender.com** (free instance: the first visit after 15 idle minutes takes about a minute to wake up)
   - Customer app: https://haltwise.onrender.com/#/app · Bank console: https://haltwise.onrender.com/#/bank · Presenter view (side by side): https://haltwise.onrender.com/#/demo
+- **Demo video (2:53): https://youtu.be/gSawsUNYiZQ**
 - Licence: Apache-2.0
 - All bank data in this repo and demo is **simulated demo data**. Account numbers are fictional and shown as last 4 digits only.
 
