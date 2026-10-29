@@ -103,7 +103,7 @@ export function Home() {
           <div className="g3">
             <div>
               <div className="stat-big">≈ $16B</div>
-              <p className="muted">Fraud losses reported to the US FTC in 2025, a record. Bank impersonators caused the highest reported losses.</p>
+              <p className="muted">Fraud losses reported to the US FTC in 2025, a record. Among business impersonators, bank impersonators caused the highest reported losses.</p>
               <div className="source-note">Source: FTC, June 2026</div>
             </div>
             <div>
