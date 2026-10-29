@@ -157,7 +157,15 @@ export function CallGuard() {
           </div>
         </div>
         <div className="small muted">{t('noAudio')}</div>
-        {call && <div className="alert-banner">{t('onCallNow')}</div>}
+        {/* Coming back to this tab mid-call: the call screen is gone, but the customer must still be able to end it. */}
+        {call && (
+          <>
+            <div className="alert-banner">{t('onCallNow')}</div>
+            <button className="hangup" onClick={hangUp}>
+              {t('hangUp')}
+            </button>
+          </>
+        )}
       </div>
     )
 
