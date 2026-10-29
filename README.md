@@ -21,7 +21,8 @@ run it on infrastructure it controls and customer messages never go to a closed 
 
 > **Core principle: the AI can only brake. It can never move money.**
 
-- Live demo: `https://<your-render-url>/#/demo` (customer phone + bank Command Center side by side)
+- **Live demo: https://haltwise.onrender.com** (free instance: the first visit after 15 idle minutes takes about a minute to wake up)
+  - Customer app: https://haltwise.onrender.com/#/app · Bank console: https://haltwise.onrender.com/#/bank · Presenter view (side by side): https://haltwise.onrender.com/#/demo
 - Licence: Apache-2.0
 - All bank data in this repo and demo is **simulated demo data**. Account numbers are fictional and shown as last 4 digits only.
 
@@ -124,12 +125,15 @@ Benchmark: `npm run benchmark` (defaults: 100 spam + 100 legitimate messages, Na
 
 Full method, the tuning run and error analysis: [BENCHMARK.md](BENCHMARK.md).
 
-## Deploy (Render)
+## Deploy
 
-1. Push this repo to GitHub.
-2. Render → New → Blueprint → pick the repo (uses `render.yaml`).
-3. Set `NEBIUS_API_KEY` and `TAVILY_API_KEY` when prompted. Deploy.
-4. Open `https://<service>.onrender.com/#/demo`.
+The live demo runs on Render's free instance from the `Dockerfile` (any container host works; it listens on `$PORT`).
+
+1. Render → New → Web Service → Public Git Repository → `https://github.com/HadiaSiddique/haltwise`. Render detects the Dockerfile.
+2. Instance type: Free. Environment: `NEBIUS_API_KEY`, `TAVILY_API_KEY` (and optionally `NOTICE_SIGNING_SECRET`).
+3. Deploy, then open `https://<service>.onrender.com`.
+
+`render.yaml` is also included for Blueprint deploys.
 
 ## API
 

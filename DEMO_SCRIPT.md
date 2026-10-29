@@ -1,6 +1,6 @@
 # Haltwise demo script (2:50)
 
-Setup before recording: open `https://<render-url>/#/demo` in Chrome at 1440x900+. Command Center → "Reset demo data".
+Setup before recording: open `https://haltwise.onrender.com/#/demo` in Chrome at 1440x900+. Command Center → "Reset demo data".
 Customer phone: language English, rail **Faster Payments · GB**. Turn system audio on (the demo call speaks aloud).
 
 | Time | Screen | Action | Voice-over |

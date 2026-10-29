@@ -1,7 +1,7 @@
 # Haltwise: open-model AI that stops scams at the moment of payment
 
 **Tracks:** Best Apps and Agents · Best Use of Tavily
-**Live demo:** https://<render-url>/#/demo · **Code:** https://github.com/HadiaSiddique/haltwise (Apache-2.0, public)
+**Live demo:** https://haltwise.onrender.com · **Code:** https://github.com/HadiaSiddique/haltwise (Apache-2.0, public)
 
 ## Inspiration
 
