@@ -21,18 +21,24 @@ interface Case {
 const NAV: { id: View; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'cases', label: 'Case queue' },
+  { id: 'watchdog', label: 'Watchdog' },
   { id: 'trace', label: 'Agent trace' },
   { id: 'mule', label: 'Mule check' },
   { id: 'radar', label: 'Scam Radar' },
   { id: 'audit', label: 'Audit log' },
   { id: 'hack', label: 'Try to hack Haltwise' },
   { id: 'benchmark', label: 'Benchmark' },
-  { id: 'watchdog', label: 'Watchdog' },
   { id: 'system', label: 'Models & policy' },
 ]
 
+/** "#/bank/watchdog" opens that page directly, so a judge or a video can link to it. */
+const viewFromHash = (): View => {
+  const id = location.hash.match(/^#\/bank\/(\w+)/)?.[1]
+  return NAV.find(n => n.id === id)?.id ?? 'overview'
+}
+
 export function CommandCenter({ embedded }: { embedded?: boolean }) {
-  const [view, setView] = useState<View>('overview')
+  const [view, setView] = useState<View>(viewFromHash)
   const [trace, setTrace] = useState<TraceEvent[]>([])
   const [audit, setAudit] = useState<AuditEvent[]>([])
   const [cases, setCases] = useState<Case[]>([])
