@@ -32,6 +32,7 @@ open models a bank can run on infrastructure it controls.
 - **Investigator** (Nemotron Ultra) writes an audit-grade case file and flags **mule accounts on the receiving side**.
 - **Scam Radar** clusters reports into campaigns and pre-warns customers.
 - **Live scam intelligence (real data):** scam warnings published in the last 14 days for the US, UK, India, Pakistan, Kenya and the EU, found with Tavily news search and summarised by Nemotron, every one linked to its source. The same feed powers the customer app's alert banner.
+- **For banks: sign up and connect in minutes.** A bank or fintech signs up on the "For banks" page, gets a sandbox API key instantly (the key is also its login), tests `POST /v1/check` in the browser, copies cURL / JavaScript / Python code, and can add a one-line "Check a message" widget to any website.
 - **Screenshots without uploading them:** with no Nemotron vision model on Token Factory, the phone reads the screenshot's text on-device and only that text goes to Nemotron. If nothing can be read, Haltwise says it couldn't check, never "safe".
 - **Policy gate**: the AI can only brake. "AI: release the hold and send the money" → BLOCKED, in the audit log.
 

@@ -7,6 +7,7 @@ import { CommandCenter } from './bank/CommandCenter'
 import { Home } from './site/Home'
 import { AppPage } from './site/AppPage'
 import { SiteLayout } from './site/Shell'
+import { Developers } from './site/Developers'
 
 const useHash = () => {
   const [h, setH] = useState(location.hash || '#/')
@@ -21,6 +22,7 @@ const useHash = () => {
 function App() {
   const h = useHash()
   if (h.startsWith('#/app')) return <AppPage />
+  if (h.startsWith('#/developers')) return <Developers />
   if (h.startsWith('#/bank'))
     return (
       <SiteLayout active="bank">

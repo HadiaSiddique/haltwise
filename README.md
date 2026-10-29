@@ -135,11 +135,22 @@ The live demo runs on Render's free instance from the `Dockerfile` (any containe
 
 `render.yaml` is also included for Blueprint deploys.
 
-## API
+## For banks: sign-up, API and website widget
 
-`POST /v1/check` with `{ "text": "...", "url": "...", "phone": "...", "lang": "en" }` →
-`{ risk, verdict, category, red_flags, detected_language, explanation, injection_attempt, model }`.
-OpenAPI spec at `/v1/openapi.json`.
+Customers never sign up to Haltwise; they use their own bank's app, and the bank connects Haltwise behind it.
+The **For banks** page (https://haltwise.onrender.com/#/developers) lets a bank, fintech or telco:
+
+1. **Sign up** (organisation, work email, country) and get a **sandbox API key** instantly. Keys are HMAC-signed and
+   self-contained (`server/src/developers.ts`), so they work without a database and survive restarts of a free host.
+   The key is also the **login**: paste it on the page from any device to see the account and usage.
+2. **Call the API** from its own code:
+   `POST /v1/check` with header `Authorization: Bearer <key>` and body `{ "text": "...", "url": "...", "phone": "...", "lang": "en" }` →
+   `{ risk, verdict, category, red_flags, detected_language, explanation, advice, injection_attempt, model }`.
+   CORS is open so any website can call it; sandbox keys allow 30 checks per minute. OpenAPI spec: `/v1/openapi.json`.
+3. **Add the widget** to any website with one line (a "Check a message" button in a shadow DOM, 5 languages):
+   `<script src="https://haltwise.onrender.com/embed.js" data-key="<key>" data-lang="en" async></script>`
+
+In production a bank would deploy the same container in its own cloud with SSO for staff and a persistent key store.
 
 ## Repository layout
 

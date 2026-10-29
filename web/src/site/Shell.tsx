@@ -4,7 +4,9 @@ import { Brand } from '../components'
 
 export const GITHUB = 'https://github.com/HadiaSiddique/haltwise'
 
-export function Nav({ active }: { active: 'home' | 'app' | 'bank' }) {
+export type Page = 'home' | 'app' | 'bank' | 'developers'
+
+export function Nav({ active }: { active: Page }) {
   return (
     <header className="nav">
       <div className="nav-inner">
@@ -21,12 +23,12 @@ export function Nav({ active }: { active: 'home' | 'app' | 'bank' }) {
           <a href="#/bank" className={active === 'bank' ? 'on' : ''}>
             Bank console
           </a>
-          <a href={GITHUB} target="_blank" rel="noreferrer" className="hide-sm">
-            GitHub
+          <a href="#/developers" className={active === 'developers' ? 'on' : ''}>
+            For banks
           </a>
         </nav>
         <div className="nav-right">
-          {active === 'home' ? (
+          {active === 'home' || active === 'developers' ? (
             <a className="btn primary small" href="#/app">
               Try it live
             </a>
@@ -52,8 +54,9 @@ export function Footer() {
           · Apache-2.0 · Built for the Nebius x NVIDIA Global AI Hackathon
         </div>
         <div className="row wrap" style={{ gap: 16 }}>
+          <a href="#/developers">For banks &amp; developers</a>
           <a href={GITHUB} target="_blank" rel="noreferrer">
-            Source code
+            Source code (GitHub)
           </a>
           <a href={`${GITHUB}/blob/main/BENCHMARK.md`} target="_blank" rel="noreferrer">
             Benchmark
@@ -71,7 +74,7 @@ export function Footer() {
   )
 }
 
-export function SiteLayout({ active, children }: { active: 'home' | 'app' | 'bank'; children: ReactNode }) {
+export function SiteLayout({ active, children }: { active: Page; children: ReactNode }) {
   // Block body on purpose: newer Chrome returns a Promise from scrollTo, and React would call it as a cleanup.
   useEffect(() => {
     window.scrollTo(0, 0)

@@ -117,7 +117,7 @@ export interface Channel {
  * so the model cannot invent a helpline.
  */
 export async function reportingChannels(run: Run, country: string, lang: string): Promise<{ channels: Channel[]; sources: { title: string; url: string }[]; live: boolean }> {
-  const cacheKey = `channels:v4:${country}:${lang}`
+  const cacheKey = `channels:v5:${country}:${lang}`
   const cached = kvGet<{ channels: Channel[]; sources: { title: string; url: string }[] }>(cacheKey, 6 * 3600 * 1000)
   if (cached) {
     run.log('intel', `reporting channels for ${country} (cached live result)`, { status: 'ok', model: 'tavily', detail: { channels: cached.channels.length } })
@@ -188,7 +188,7 @@ export function isOfficialHost(u: string) {
 }
 
 /** URL shapes that are articles about fraud rather than places to report it. */
-const NOT_A_REPORTING_PAGE = /\/(news|blog|press|media|media-center|publications?|research|newsroom|stories|articles?|events|avisos)\b|benefit-fraud|tax-evasion|\.pdf$/i
+const NOT_A_REPORTING_PAGE = /\/(news|blog|press|media|media-center|publications?|research|newsroom|stories|articles?|events|avisos)\b|benefit-fraud|tax-evasion|\.pdf$|\/scripts\/BS_|Directions|[Cc]ircular/i
 
 /** Government domains first; if that is empty or slow, an open search. Real results are reused for 12h. */
 async function channelSearch(country: string) {

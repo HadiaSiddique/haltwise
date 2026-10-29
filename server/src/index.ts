@@ -18,6 +18,8 @@ import { investigate, muleCheck } from './agents/investigator.ts'
 import { clusterReports, nameCampaigns, addReport, alertsFor } from './agents/radar.ts'
 import { listCases, getCase } from './cases.ts'
 import { liveAlerts } from './agents/live.ts'
+import { cors } from 'hono/cors'
+import { issueKey, verifyKey, meter, usageOf, signupAllowed } from './developers.ts'
 
 seed()
 const app = new Hono()
@@ -244,12 +246,39 @@ app.get('/api/stream', c =>
   }),
 )
 
-/** Public API for banks and telcos (see /v1/openapi.json). */
+/** Developer sign-up: a bank or fintech gets a sandbox API key instantly. The key doubles as its login. */
+app.post('/api/developers/signup', async c => {
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local'
+  if (!signupAllowed(ip)) return c.json({ error: 'Too many sign-ups from this network. Try again in an hour.' }, 429)
+  const b = await c.req.json().catch(() => ({}))
+  const out = issueKey(b)
+  if ('error' in out) return c.json(out, 400)
+  new Run('developers').log('developers', `sandbox key issued to ${out.info.org}`, { status: 'info', detail: { country: out.info.country } })
+  return c.json({ key: out.key, account: out.info })
+})
+
+app.get('/api/developers/me', c => {
+  const key = c.req.header('authorization') ?? ''
+  const info = verifyKey(key)
+  if (!info) return c.json({ error: 'That key is not valid.' }, 401)
+  return c.json({ account: info, usage: usageOf(key) })
+})
+
+/** Public API for banks, fintechs and telcos (see /v1/openapi.json). Any website may call it with a sandbox key. */
+app.use('/v1/*', cors({ origin: '*', allowMethods: ['POST', 'GET', 'OPTIONS'], allowHeaders: ['Content-Type', 'Authorization'] }))
+
 app.post('/v1/check', async c => {
-  const b = await c.req.json()
-  const run = new Run(`api-${String(b.client_id ?? 'anon').slice(0, 24)}`)
-  const v = await inspect(run, { text: b.text, url: b.url, phone: b.phone, lang: b.lang ?? 'en' })
-  return c.json({ risk: v.risk, verdict: v.verdict, category: v.category, red_flags: v.redFlags, detected_language: v.detectedLanguage, explanation: v.explanation, injection_attempt: v.injection.suspected, model: v.model })
+  const key = c.req.header('authorization') ?? ''
+  const info = verifyKey(key)
+  if (!info) return c.json({ error: 'Missing or invalid API key. Get a free sandbox key at /#/developers and send it as "Authorization: Bearer <key>".' }, 401)
+  const m = meter(key)
+  if (!m.ok) return c.json({ error: `Rate limit: sandbox keys allow ${30} checks per minute.` }, 429)
+  const b = await c.req.json().catch(() => ({}))
+  if (!b.text && !b.url && !b.phone) return c.json({ error: 'Send at least one of: text, url, phone.' }, 400)
+  const run = new Run(`api-${info.org.slice(0, 24)}`)
+  const v = await inspect(run, { text: b.text ? String(b.text).slice(0, 4000) : undefined, url: b.url, phone: b.phone, lang: String(b.lang ?? 'en').slice(0, 5) })
+  c.header('X-RateLimit-Remaining', String(m.remaining))
+  return c.json({ risk: v.risk, verdict: v.verdict, category: v.category, red_flags: v.redFlags, detected_language: v.detectedLanguage, explanation: v.explanation, advice: v.advice, injection_attempt: v.injection.suspected, model: v.model })
 })
 app.get('/v1/openapi.json', c => c.json(OPENAPI))
 
@@ -258,12 +287,24 @@ app.get('*', serveStatic({ path: './web/dist/index.html' }))
 
 const OPENAPI = {
   openapi: '3.0.3',
-  info: { title: 'Haltwise Check API', version: '0.1.0', description: 'Scam check for messages, URLs and phone numbers. Runs on NVIDIA Nemotron via Nebius Token Factory. Brake-only: never moves money.' },
+  info: {
+    title: 'Haltwise Check API',
+    version: '0.2.0',
+    description: 'Scam check for messages, URLs and phone numbers. Runs on NVIDIA Nemotron via Nebius Token Factory. Brake-only: never moves money. Get a free sandbox key at https://haltwise.onrender.com/#/developers (30 checks per minute).',
+  },
+  servers: [{ url: 'https://haltwise.onrender.com' }],
+  components: { securitySchemes: { bearer: { type: 'http', scheme: 'bearer', description: 'Sandbox API key (hw_sandbox_...)' } } },
+  security: [{ bearer: [] }],
   paths: {
     '/v1/check': {
       post: {
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { text: { type: 'string' }, url: { type: 'string' }, phone: { type: 'string' }, lang: { type: 'string', example: 'en' }, client_id: { type: 'string' } } } } } },
-        responses: { '200': { description: 'Verdict', content: { 'application/json': { schema: { type: 'object', properties: { risk: { type: 'integer' }, verdict: { type: 'string', enum: ['scam', 'suspicious', 'likely_safe'] }, category: { type: 'string' }, red_flags: { type: 'array', items: { type: 'object', properties: { quote: { type: 'string' }, why: { type: 'string' } } } }, detected_language: { type: 'string' }, explanation: { type: 'string' }, injection_attempt: { type: 'boolean' }, model: { type: 'string' } } } } } } },
+        summary: 'Check a message, link or phone number for scam signals',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { text: { type: 'string' }, url: { type: 'string' }, phone: { type: 'string' }, lang: { type: 'string', example: 'en', description: 'Language for the explanation: en, es, ar, hi, ur' } } } } } },
+        responses: {
+          '200': { description: 'Verdict', content: { 'application/json': { schema: { type: 'object', properties: { risk: { type: 'integer' }, verdict: { type: 'string', enum: ['scam', 'suspicious', 'likely_safe'] }, category: { type: 'string' }, red_flags: { type: 'array', items: { type: 'object', properties: { quote: { type: 'string' }, why: { type: 'string' } } } }, detected_language: { type: 'string' }, explanation: { type: 'string' }, advice: { type: 'string' }, injection_attempt: { type: 'boolean' }, model: { type: 'string' } } } } } },
+          '401': { description: 'Missing or invalid API key' },
+          '429': { description: 'Rate limit exceeded' },
+        },
       },
     },
   },

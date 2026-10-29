@@ -275,8 +275,11 @@ export function Home() {
             <div className="icon">{Icons.call}</div>
             <h3>Telcos and fintechs</h3>
             <p>
-              The same checks through one API: <code>POST /v1/check</code>. Priced per active customer, per month.
+              The same checks through one API: <code>POST /v1/check</code>, or a one-line website widget. Priced per active customer, per month.
             </p>
+            <a className="btn small" style={{ marginTop: 12 }} href="#/developers">
+              Get a free sandbox API key →
+            </a>
           </div>
         </div>
         <div className="g3" style={{ marginTop: 16 }}>
