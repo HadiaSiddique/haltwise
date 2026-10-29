@@ -117,7 +117,7 @@ export interface Channel {
  * so the model cannot invent a helpline.
  */
 export async function reportingChannels(run: Run, country: string, lang: string): Promise<{ channels: Channel[]; sources: { title: string; url: string }[]; live: boolean }> {
-  const cacheKey = `channels:v6:${country}:${lang}`
+  const cacheKey = `channels:v7:${country}:${lang}`
   const cached = kvGet<{ channels: Channel[]; sources: { title: string; url: string }[] }>(cacheKey, 6 * 3600 * 1000)
   if (cached) {
     run.log('intel', `reporting channels for ${country} (cached live result)`, { status: 'ok', model: 'tavily', detail: { channels: cached.channels.length } })
@@ -163,7 +163,11 @@ Never invent phone numbers or URLs.`,
   // The model sometimes proposes only pages the code rejects (e.g. central-bank publications). Rather than show
   // nothing, fall back to search results that pass the same official-host and not-an-article checks.
   if (!channels.length)
-    channels = s.sources.filter(r => isOfficialHost(r.url) && !NOT_A_REPORTING_PAGE.test(r.url) && !/publication|annual.?report|report.?publications/i.test(r.url)).slice(0, 3).map(r => ({ name: r.title, url: r.url }))
+    channels = s.sources
+      .filter(r => isOfficialHost(r.url) && !NOT_A_REPORTING_PAGE.test(r.url) && !/publication|annual.?report|report.?publications/i.test(r.url))
+      .filter((r, i, all) => all.findIndex(x => sameUrl(x.url, r.url)) === i)
+      .slice(0, 3)
+      .map(r => ({ name: r.title, url: r.url }))
   // No guessing: if still nothing qualifies, the customer is told to call the number on their card instead.
   run.log('intel', 'channels verified against sources', {
     model: res.model,
