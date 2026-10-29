@@ -117,7 +117,7 @@ export interface Channel {
  * so the model cannot invent a helpline.
  */
 export async function reportingChannels(run: Run, country: string, lang: string): Promise<{ channels: Channel[]; sources: { title: string; url: string }[]; live: boolean }> {
-  const cacheKey = `channels:v7:${country}:${lang}`
+  const cacheKey = `channels:v8:${country}:${lang}`
   const cached = kvGet<{ channels: Channel[]; sources: { title: string; url: string }[] }>(cacheKey, 6 * 3600 * 1000)
   if (cached) {
     run.log('intel', `reporting channels for ${country} (cached live result)`, { status: 'ok', model: 'tavily', detail: { channels: cached.channels.length } })
@@ -191,9 +191,12 @@ const LOCAL_QUERY: Record<string, string> = {
  * "how to report a scammer" page for the UAE; code, not the model, decides what counts as official.
  */
 const GOV_HOST = /(^|\.)(gov|gob|gouv|govt|go|gc|police|politie|polizei)\.[a-z.]+$|\.gov$|\.gov\.[a-z]{2}$|(^|\.)europa\.eu$|\.police\.uk$/i
-/** "https://www.x.gov.in/" and "https://x.gov.in" are the same channel. */
+/**
+ * "https://www.x.gov.in/" and "https://x.gov.in" are the same channel; so are query strings, fragments and index
+ * pages (India listed sancharsaathi.gov.in three times: root, /Home/index.jsp#..., ?wpmobileexternal=true).
+ */
 const sameUrl = (a: string, b: string) => {
-  const n = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')
+  const n = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/(home\/)?index\.\w+$/, '').replace(/\/+$/, '')
   return n(a) === n(b)
 }
 
