@@ -1,3 +1,15 @@
+---
+title: Haltwise
+emoji: 🛑
+colorFrom: indigo
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+license: apache-2.0
+short_description: Open-model AI that stops scams at the moment of payment
+---
+
 # Haltwise
 
 **Open-model AI that stops scams at the moment of payment.** Any bank, fintech or telco can own it.
